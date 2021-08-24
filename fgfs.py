@@ -30,64 +30,67 @@ def check_igc(hdr, data):
 
     return True
 
+# Fuse GPS and pressure altitudes
+def fuse_altitude(alt_pressure, alt_gps, delta_t):
+    n = (60 // delta_t // 2) * 2 + 1
+    delta_alt = np.convolve(alt_gps - alt_pressure, np.ones((n,)) / n, mode='same')
+    alt_fuse = alt_pressure + delta_alt
+
+    return alt_fuse
+
 # Convert to local X/Y coordinates and resample data
-def resample_igc(data, geoid_height, tdelta):
-    utc, lat, lon = data['utc'], data['lat'], data['lon']
-    alt, alt_gps = data['alt'], data['alt_gps']
-
-    # Sample interval
-    res = mode(utc[1:] - utc[:-1])
-    delta_t = res.mode[0]
-
-    # Fuse pressure and GPS altitudes
-    n = (int(60 // delta_t) // 2) * 2 + 1
-    delta_alt = np.convolve(alt_gps - alt, np.ones((n,)) / n, mode='same')
-    alt_fuse = alt + delta_alt - geoid_height
-
+def xyz_resample(utc, lat, lon, alt, resample_t):
     # Convert to local x/y coordinates
     transformer = Transformer.from_crs(EPSG_WGS84, EPSG_XY)
-    y, x = transformer.transform(data['lat'], data['lon'])
+    y, x = transformer.transform(lat, lon)
 
     # Resample using cubic splines
-    n = round((utc[-1] - utc[0]) / tdelta) + 1
-    t = (np.arange(n) * tdelta) + utc[0]
+    n = round((utc[-1] - utc[0]) / resample_t) + 1
+    t = (np.arange(n) * resample_t) + utc[0]
 
     x1 = splev(t, splrep(utc, x, s=0), der=0)
     y1 = splev(t, splrep(utc, y, s=0), der=0)
-    z1 = splev(t, splrep(utc, alt_fuse, s=0), der=0)
+    z1 = splev(t, splrep(utc, alt, s=0), der=0)
 
     return t, x1, y1, z1
 
+# Calculate flight dynamics, heading, roll, etc.
 def calc_dynamics(x, y, tdelta, wind_speed, wind_dir):
     n = len(x)
 
     wind_speed = wind_speed * 1852 / 3600
     wind_dir = np.radians(wind_dir)
 
+    # Correct for wind velocity
     wind_x = np.arange(n) * wind_speed * tdelta * np.sin(wind_dir)
     wind_y = np.arange(n) * wind_speed * tdelta * np.cos(wind_dir)
     xw = x + wind_x
     yw = y + wind_y
 
+    # Calculate heading
     xdelta = xw[1:] - xw[:-1]
     ydelta = yw[1:] - yw[:-1]
     heading = np.degrees(np.arctan2(xdelta, ydelta))
 
     return xw, yw, heading
 
+# Parse IGC UTC value
 def parse_utc(utc):
     h, ms = divmod(utc, 10000)
     m, s = divmod(ms, 100)
 
     return h * 3600 + m * 60 + s
 
-def output_data(start, stop, t, x, y, z, heading):
+# Create FGFS data
+def fgfs_data(start, stop, t, x, y, z, heading):
     n = np.where(t == start)[0][0]
     m = np.where(t == stop)[0][0]
 
+    # Convert local X/Y/Z to ECEF
     transformer = Transformer.from_crs(EPSG_XY, EPSG_ECEF)
     xec, yec, zec = transformer.transform(y[n:m], x[n:m], z[n:m])
 
+    # Rotate orientation from local to ECEF
     ori_arr = []
     for i in range(n, m):
         # Init
@@ -104,13 +107,12 @@ def output_data(start, stop, t, x, y, z, heading):
         rot = Rotation.from_euler("zyx", [-heading[i], 0, 0], degrees=True)
         attitude = rot.apply(attitude)
 
+        # Convert to rotation vector
         ori = Rotation.from_matrix(attitude).as_rotvec()
         ori_arr.append(ori)
 
-    x = np.array(ori_arr)
-    x1 = x.transpose()
-
-    return np.transpose(np.vstack((xec, yec, zec, x1[0], x1[1], x1[2])))
+    out = np.array(ori_arr).transpose()
+    return np.transpose(np.vstack((xec, yec, zec, out[0], out[1], out[2])))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -127,17 +129,15 @@ if __name__ == '__main__':
                         help='Wind speed (kts), default 0kts')
     parser.add_argument('--wind_dir', '-d', type=float, default=0.0,
                         help='Wind direction')
-    parser.add_argument('--tstep', '-t', type=float, default=0.1,
-                        help='Time step (s), default 0.1s')
+    parser.add_argument('--tdelta', '-t', type=float, default=0.1,
+                        help='Output time sample (s), default 0.1s')
     parser.add_argument('--geoid', '-g', type=float, default=48.0,
                         help='Geoid height (m), default 48m')
     parser.add_argument('--diag', action='store_true',
                         help='Make diagnostic plots')
-
     args = parser.parse_args()
 
     # Time parameters
-    tdelta = args.tstep
     start = parse_utc(args.start)
     stop = parse_utc(args.stop)
 
@@ -147,21 +147,37 @@ if __name__ == '__main__':
         if not check_igc(hdr, data):
             continue
 
-        # Convert to local X/Y/Z coordinates and resample
-        t, x, y, z = resample_igc(data, args.geoid, tdelta)
+        utc, lat, lon = data['utc'], data['lat'], data['lon']
+        alt_p, alt_g = data['alt'], data['alt_gps']
+
+        # IGC file sample interval
+        res = mode(utc[1:] - utc[:-1])
+        delta_t_igc = res.mode[0]
+
+        # Fuse pressure and GPS altitudes
+        alt = fuse_altitude(alt_p, alt_g, delta_t_igc)
+
+        # Subtract Geoid height
+        alt = alt - args.geoid
+
+        # Interpolate and convert to local X/Y/Z coordinates
+        t, x, y, z = xyz_resample(utc, lat, lon, alt, args.tdelta)
 
         # Calculate flight dynamics
-        x1, y1, heading = calc_dynamics(x, y, tdelta,
+        x1, y1, heading = calc_dynamics(x, y, args.tdelta,
                 args.wind_speed, args.wind_dir)
 
-        out = output_data(start, stop, t, x, y, z, heading)
+        # Get data for FGFS
+        out = fgfs_data(start, stop, t, x, y, z, heading)
 
+        # Save to file
         writer = csv.writer(args.outfile)
         writer.writerows(out)
 
+        # Plot diagnostics
         if args.diag:
             fix, axs = pyplot.subplots(2, 2)
-            axs[0][0].plot(z)
+            axs[0][0].plot(alt)
 
             axs[0][1].plot(heading)
 
