@@ -56,12 +56,11 @@ def xyz_resample(utc, lat, lon, alt, resample_t):
 
 # Calculate flight dynamics, heading, roll, etc.
 def calc_dynamics(x, y, tdelta, wind_speed, wind_dir):
-    n = len(x)
-
     wind_speed = wind_speed * 1852 / 3600
     wind_dir = np.radians(wind_dir)
 
     # Correct for wind velocity
+    n = len(x)
     wind_x = np.arange(n) * wind_speed * tdelta * np.sin(wind_dir)
     wind_y = np.arange(n) * wind_speed * tdelta * np.cos(wind_dir)
     xw = x + wind_x
@@ -71,8 +70,28 @@ def calc_dynamics(x, y, tdelta, wind_speed, wind_dir):
     xdelta = xw[1:] - xw[:-1]
     ydelta = yw[1:] - yw[:-1]
     heading = np.degrees(np.arctan2(xdelta, ydelta))
+    heading = np.append(heading, heading[-1])
 
-    return xw, yw, heading
+    unwrapped_heading = np.unwrap(np.radians(heading))
+
+    kernel_size = int(4 / tdelta) // 2 + 1
+    kernel = np.ones(kernel_size) / kernel_size
+    av_unwrapped_heading = np.convolve(unwrapped_heading, kernel, mode='same')
+
+    # Calculate speed
+    xdelta = x[1:] - x[:-1]
+    ydelta = y[1:] - y[:-1]
+    speed = np.sqrt(xdelta * xdelta + ydelta * ydelta) / tdelta
+    speed = np.append(speed, speed[-1])
+
+    # Bank angle
+    omega = (unwrapped_heading[1:] - unwrapped_heading[:-1]) / tdelta
+    omega = np.append(omega, omega[-1])
+    theta = np.degrees(np.arctan(omega * speed / 9.81))
+
+    av_theta = np.convolve(theta, kernel, mode='same')
+
+    return xw, yw, np.mod(np.degrees(av_unwrapped_heading), 360), av_theta
 
 # Parse IGC UTC value
 def parse_utc(utc):
@@ -82,7 +101,7 @@ def parse_utc(utc):
     return h * 3600 + m * 60 + s
 
 # Create FGFS data
-def fgfs_data(start, stop, t, x, y, z, heading):
+def fgfs_data(start, stop, t, x, y, z, heading, roll):
     n = np.where(t == start)[0][0]
     m = np.where(t == stop)[0][0]
 
@@ -104,7 +123,7 @@ def fgfs_data(start, stop, t, x, y, z, heading):
         rot = Rotation.from_euler("zyx", [0, 90, 0], degrees=True)
         attitude = rot.apply(attitude)
 
-        rot = Rotation.from_euler("zyx", [-heading[i], 0, 0], degrees=True)
+        rot = Rotation.from_euler("zyx", [-heading[i], 0, -roll[i]], degrees=True)
         attitude = rot.apply(attitude)
 
         # Convert to rotation vector
@@ -164,11 +183,11 @@ if __name__ == '__main__':
         t, x, y, z = xyz_resample(utc, lat, lon, alt, args.tdelta)
 
         # Calculate flight dynamics
-        x1, y1, heading = calc_dynamics(x, y, args.tdelta,
+        x1, y1, heading, roll = calc_dynamics(x, y, args.tdelta,
                 args.wind_speed, args.wind_dir)
 
         # Get data for FGFS
-        out = fgfs_data(start, stop, t, x, y, z, heading)
+        out = fgfs_data(start, stop, t, x, y, z, heading, roll)
 
         # Save to file
         writer = csv.writer(args.outfile)
@@ -177,7 +196,7 @@ if __name__ == '__main__':
         # Plot diagnostics
         if args.diag:
             fix, axs = pyplot.subplots(2, 2)
-            axs[0][0].plot(alt)
+            axs[0][0].plot(alt_g)
 
             axs[0][1].plot(heading)
 
