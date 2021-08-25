@@ -16,6 +16,21 @@ EPSG_WGS84 = 4326
 EPSG_XY = 3035
 EPSG_ECEF = 4978
 
+# Apply simple running average
+def filter(data, n):
+    # Filter length must be odd
+    assert n % 2 == 1
+
+    kernel = np.ones(n) / n
+    m = n // 2
+
+    # Pad data to minimise end effects
+    pad = np.ones(m)
+    d = np.concatenate((pad * data[0], data, pad * data[-1]))
+
+    out = np.convolve(d, kernel, mode='valid')
+    return out
+
 def check_igc(hdr, data):
     utc = data['utc']
 
@@ -33,7 +48,7 @@ def check_igc(hdr, data):
 # Fuse GPS and pressure altitudes
 def fuse_altitude(alt_pressure, alt_gps, delta_t):
     n = (60 // delta_t // 2) * 2 + 1
-    delta_alt = np.convolve(alt_gps - alt_pressure, np.ones((n,)) / n, mode='same')
+    delta_alt = filter(alt_gps - alt_pressure, n)
     alt_fuse = alt_pressure + delta_alt
 
     return alt_fuse
@@ -55,7 +70,7 @@ def xyz_resample(utc, lat, lon, alt, resample_t):
     return t, x1, y1, z1
 
 # Calculate flight dynamics, heading, roll, etc.
-def calc_dynamics(x, y, tdelta, wind_speed, wind_dir):
+def calc_dynamics(x, y, z, tdelta, wind_speed, wind_dir):
     wind_speed = wind_speed * 1852 / 3600
     wind_dir = np.radians(wind_dir)
 
@@ -74,24 +89,28 @@ def calc_dynamics(x, y, tdelta, wind_speed, wind_dir):
 
     unwrapped_heading = np.unwrap(np.radians(heading))
 
-    kernel_size = int(4 / tdelta) // 2 + 1
-    kernel = np.ones(kernel_size) / kernel_size
-    av_unwrapped_heading = np.convolve(unwrapped_heading, kernel, mode='same')
+    fsize = int(4 / tdelta) // 2 + 1
+    av_unwrapped_heading = filter(unwrapped_heading, fsize)
 
     # Calculate speed
-    xdelta = x[1:] - x[:-1]
-    ydelta = y[1:] - y[:-1]
-    speed = np.sqrt(xdelta * xdelta + ydelta * ydelta) / tdelta
+    speed = np.sqrt(xdelta ** 2  + ydelta ** 2) / tdelta
     speed = np.append(speed, speed[-1])
+    speed = filter(speed, (int(5 / tdelta) // 2) * 2 + 1)
 
     # Bank angle
     omega = (unwrapped_heading[1:] - unwrapped_heading[:-1]) / tdelta
     omega = np.append(omega, omega[-1])
     theta = np.degrees(np.arctan(omega * speed / 9.81))
 
-    av_theta = np.convolve(theta, kernel, mode='same')
+    av_theta = filter(theta, fsize)
 
-    return xw, yw, np.mod(np.degrees(av_unwrapped_heading), 360), av_theta
+    # Pitch angle
+    zdelta = z[1:] - z[:-1]
+    zdelta = np.append(zdelta, zdelta[-1])
+    pitch = np.degrees(zdelta / (speed * tdelta))
+    pitch = filter(pitch, (int(2 / tdelta) // 2) * 2 + 1)
+
+    return xw, yw, np.mod(np.degrees(av_unwrapped_heading), 360), av_theta, pitch 
 
 # Parse IGC UTC value
 def parse_utc(utc):
@@ -101,7 +120,7 @@ def parse_utc(utc):
     return h * 3600 + m * 60 + s
 
 # Create FGFS data
-def fgfs_data(start, stop, t, x, y, z, heading, roll):
+def fgfs_data(start, stop, t, x, y, z, heading, roll, pitch):
     n = np.where(t == start)[0][0]
     m = np.where(t == stop)[0][0]
 
@@ -123,7 +142,7 @@ def fgfs_data(start, stop, t, x, y, z, heading, roll):
         rot = Rotation.from_euler("zyx", [0, 90, 0], degrees=True)
         attitude = rot.apply(attitude)
 
-        rot = Rotation.from_euler("zyx", [-heading[i], 0, -roll[i]], degrees=True)
+        rot = Rotation.from_euler("zyx", [-heading[i], -pitch[i], -roll[i]], degrees=True)
         attitude = rot.apply(attitude)
 
         # Convert to rotation vector
@@ -183,11 +202,11 @@ if __name__ == '__main__':
         t, x, y, z = xyz_resample(utc, lat, lon, alt, args.tdelta)
 
         # Calculate flight dynamics
-        x1, y1, heading, roll = calc_dynamics(x, y, args.tdelta,
+        x1, y1, heading, roll, pitch = calc_dynamics(x, y, z, args.tdelta,
                 args.wind_speed, args.wind_dir)
 
         # Get data for FGFS
-        out = fgfs_data(start, stop, t, x, y, z, heading, roll)
+        out = fgfs_data(start, stop, t, x, y, z, heading, roll, pitch)
 
         # Save to file
         writer = csv.writer(args.outfile)
@@ -196,9 +215,9 @@ if __name__ == '__main__':
         # Plot diagnostics
         if args.diag:
             fix, axs = pyplot.subplots(2, 2)
-            axs[0][0].plot(alt_g)
+            axs[0][0].plot(z)
 
-            axs[0][1].plot(heading)
+            axs[0][1].plot(pitch)
 
             axs[1][0].plot(x, y)
             axs[1][0].set_aspect('equal')
