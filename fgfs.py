@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import logging
 import sys
 
@@ -167,12 +168,13 @@ def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
         ori_arr.append(ori)
 
     out = np.array(ori_arr).transpose()
-    return np.transpose(np.vstack((xec, yec, zec, vx, vy, vz, out[0], out[1], out[2])))
+    return np.transpose(np.vstack(
+        (xec, yec, zec, out[0], out[1], out[2], vx, vy, vz)))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("outfile", type=argparse.FileType('wt'),
-                        help="Output file")
+                        help="JSON Output file")
     parser.add_argument('--igc', '-i', nargs='*',
                         type=argparse.FileType('r', errors=None),
                         help='IGC files with ellipsoid datum')
@@ -196,6 +198,8 @@ if __name__ == '__main__':
     start = parse_utc(args.start)
     stop = parse_utc(args.stop)
 
+    logs = []
+    ids = []
     for igc_file in args.igc:
         hdr, data = parse_igc(igc_file)
 
@@ -226,9 +230,10 @@ if __name__ == '__main__':
         out = fgfs_data(lat.mean(), lon.mean(),
                 start, stop, t, x, y, z, heading, roll, pitch)
 
-        # Save to file
-        writer = csv.writer(args.outfile)
-        writer.writerows(out)
+        if not out is None:
+            id = hdr.get('cid') or hdr.get('gid') or hdr['id']
+            ids.append(id)
+            logs.append({'data': out.tolist(), 'id': id})
 
         # Plot diagnostics
         if args.diag:
@@ -244,3 +249,6 @@ if __name__ == '__main__':
             axs[1][1].set_aspect('equal')
 
             pyplot.show()
+
+    data = {'tdelta': args.tdelta, 'ids': ids, 'logs': logs}
+    json.dump(data, args.outfile)
