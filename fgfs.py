@@ -31,6 +31,21 @@ def filter(data, n):
     out = np.convolve(d, kernel, mode='valid')
     return out
 
+# Parse IGC UTC value
+def parse_utc(utc):
+    h, ms = divmod(utc, 10000)
+    m, s = divmod(ms, 100)
+
+    return h * 3600 + m * 60 + s
+
+# Caculate speed from 1-D array of positions
+def calc_speed(x, td, tavg):
+    v = (x[1:] - x[:-1]) / td
+    v = np.append(v, v[-1])
+
+    vs = filter(v, tavg / td)
+    return vs
+
 def check_igc(hdr, data):
     utc = data['utc']
 
@@ -109,28 +124,26 @@ def calc_dynamics(x, y, z, tdelta, wind_speed, wind_dir):
 
     return xw, yw, np.mod(np.degrees(av_unwrapped_heading), 360), av_theta, pitch 
 
-# Parse IGC UTC value
-def parse_utc(utc):
-    h, ms = divmod(utc, 10000)
-    m, s = divmod(ms, 100)
-
-    return h * 3600 + m * 60 + s
-
-def calc_speed(x, td, tavg):
-    v = (x[1:] - x[:-1]) / td
-    v = np.append(v, v[-1])
-
-    vs = filter(v, tavg / td)
-    return vs
-
 # Create FGFS data
-def fgfs_data(start, stop, t, x, y, z, heading, roll, pitch):
-    n = np.where(t == start)[0][0]
-    m = np.where(t == stop)[0][0]
+def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
+    try:
+        # Get start/stop indices
+        n = np.where(t == start)[0][0]
+        m = np.where(t == stop)[0][0]
+    except IndexError:
+        return None
+
+    # Time step size
+    tdelta = t[1] - t[0]
 
     # Convert local X/Y/Z to ECEF
     transformer = Transformer.from_crs(EPSG_XY, EPSG_ECEF)
     xec, yec, zec = transformer.transform(y[n:m], x[n:m], z[n:m])
+
+    # Calculate ECEF speed components
+    vx = calc_speed(xec, tdelta, 5)
+    vy = calc_speed(yec, tdelta, 5)
+    vz = calc_speed(zec, tdelta, 5)
 
     # Rotate orientation from local to ECEF
     ori_arr = []
@@ -139,7 +152,7 @@ def fgfs_data(start, stop, t, x, y, z, heading, roll, pitch):
         attitude = Rotation.from_euler("zyx", [0, 0, 0], degrees=True).as_matrix()
 
         # Rotate to view
-        rot = Rotation.from_euler("zyx", [-1.06, 52.45, 0], degrees=True)
+        rot = Rotation.from_euler("zyx", [-lon, lat, 0], degrees=True)
         attitude = rot.apply(attitude)
 
         # Set attitude
@@ -154,7 +167,7 @@ def fgfs_data(start, stop, t, x, y, z, heading, roll, pitch):
         ori_arr.append(ori)
 
     out = np.array(ori_arr).transpose()
-    return np.transpose(np.vstack((xec, yec, zec, out[0], out[1], out[2])))
+    return np.transpose(np.vstack((xec, yec, zec, vx, vy, vz, out[0], out[1], out[2])))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -210,7 +223,8 @@ if __name__ == '__main__':
                 args.wind_speed, args.wind_dir)
 
         # Get data for FGFS
-        out = fgfs_data(start, stop, t, x, y, z, heading, roll, pitch)
+        out = fgfs_data(lat.mean(), lon.mean(),
+                start, stop, t, x, y, z, heading, roll, pitch)
 
         # Save to file
         writer = csv.writer(args.outfile)

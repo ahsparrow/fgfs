@@ -5,13 +5,9 @@ import xdrlib
 
 #----------------------------------------------------------------------
 
-def send(x, y, z, orix, oriy, oriz):
+def send(x, y, z, vx, vy, vz, orix, oriy, oriz):
     model = b'Aircraft/DG-101G/Models/DG-101G.xml'
     model += bytearray(96 - len(model))
-
-    velx = 0
-    vely = 0
-    velz = 0
 
     av1 = 0
     av2 = 0
@@ -25,11 +21,14 @@ def send(x, y, z, orix, oriy, oriz):
     aa2 = 0
     aa3 = 0
 
+    # Not sure what value this should be, but less than this gives jerky
+    # playback
+    lag = 0.05
+
     packer = xdrlib.Packer()
 
     utc_secs = time.time() % (24 * 3600)
     packer.pack_double(utc_secs)
-    lag = 0
     packer.pack_double(lag)
 
     packer.pack_double(x)
@@ -40,9 +39,9 @@ def send(x, y, z, orix, oriy, oriz):
     packer.pack_float(oriy)
     packer.pack_float(oriz)
 
-    packer.pack_float(velx)
-    packer.pack_float(vely)
-    packer.pack_float(velz)
+    packer.pack_float(vx)
+    packer.pack_float(vy)
+    packer.pack_float(vz)
 
     packer.pack_float(av1)
     packer.pack_float(av2)
@@ -81,7 +80,7 @@ if __name__ == '__main__':
 
     reader = csv.reader(args.infile)
     for x in reader:
-        x, y, z, orix, oriy, oriz = map(float, x)
+        x, y, z, vx, vy, vz, orix, oriy, oriz = map(float, x)
 
-        send(x, y, z, orix, oriy, oriz)
+        send(x, y, z, vx, vy, vz, orix, oriy, oriz)
         time.sleep(0.1)
