@@ -19,10 +19,10 @@ EPSG_ECEF = 4978
 # Apply simple running average
 def filter(data, n):
     # Filter length must be odd
-    assert n % 2 == 1
+    n1 = int(n // 2) * 2 + 1
 
-    kernel = np.ones(n) / n
-    m = n // 2
+    kernel = np.ones(n1) / n1
+    m = n1 // 2
 
     # Pad data to minimise end effects
     pad = np.ones(m)
@@ -47,8 +47,7 @@ def check_igc(hdr, data):
 
 # Fuse GPS and pressure altitudes
 def fuse_altitude(alt_pressure, alt_gps, delta_t):
-    n = (60 // delta_t // 2) * 2 + 1
-    delta_alt = filter(alt_gps - alt_pressure, n)
+    delta_alt = filter(alt_gps - alt_pressure, 60 / delta_t)
     alt_fuse = alt_pressure + delta_alt
 
     return alt_fuse
@@ -88,27 +87,25 @@ def calc_dynamics(x, y, z, tdelta, wind_speed, wind_dir):
     heading = np.append(heading, heading[-1])
 
     unwrapped_heading = np.unwrap(np.radians(heading))
-
-    fsize = int(4 / tdelta) // 2 + 1
-    av_unwrapped_heading = filter(unwrapped_heading, fsize)
+    av_unwrapped_heading = filter(unwrapped_heading, 4 / tdelta)
 
     # Calculate speed
     speed = np.sqrt(xdelta ** 2  + ydelta ** 2) / tdelta
     speed = np.append(speed, speed[-1])
-    speed = filter(speed, (int(5 / tdelta) // 2) * 2 + 1)
+    speed = filter(speed, 5 / tdelta)
 
     # Bank angle
     omega = (unwrapped_heading[1:] - unwrapped_heading[:-1]) / tdelta
     omega = np.append(omega, omega[-1])
     theta = np.degrees(np.arctan(omega * speed / 9.81))
 
-    av_theta = filter(theta, fsize)
+    av_theta = filter(theta, 5 / tdelta)
 
     # Pitch angle
     zdelta = z[1:] - z[:-1]
     zdelta = np.append(zdelta, zdelta[-1])
     pitch = np.degrees(zdelta / (speed * tdelta))
-    pitch = filter(pitch, (int(2 / tdelta) // 2) * 2 + 1)
+    pitch = filter(pitch, 2 / tdelta)
 
     return xw, yw, np.mod(np.degrees(av_unwrapped_heading), 360), av_theta, pitch 
 
@@ -118,6 +115,13 @@ def parse_utc(utc):
     m, s = divmod(ms, 100)
 
     return h * 3600 + m * 60 + s
+
+def calc_speed(x, td, tavg):
+    v = (x[1:] - x[:-1]) / td
+    v = np.append(v, v[-1])
+
+    vs = filter(v, tavg / td)
+    return vs
 
 # Create FGFS data
 def fgfs_data(start, stop, t, x, y, z, heading, roll, pitch):
