@@ -1,5 +1,7 @@
 import datetime
+import logging
 import re
+import sys
 
 import numpy as np
 
@@ -17,14 +19,16 @@ def parse_igc(igc_file):
     # Read A record
     arec = igc_file.readline()
     if not arec.startswith("A"):
-        print("Missing A record")
+        logging.error("Missing A record")
+        sys.exit()
 
     # Read header
     header = {'id': arec[1:7]}
 
     rec = igc_file.readline()
     if not rec.startswith("H"):
-        print("Missing H record")
+        logging.error("Missing H record")
+        sys.exit()
 
     while rec.startswith("H"):
         key = rec[2:5].lower()
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     from matplotlib.dates import DateFormatter
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('igc_file', type=argparse.FileType('r', errors=None))
+    parser.add_argument('igc_file', type=argparse.FileType('r', errors='ignore'))
     parser.add_argument('--gps', action="store_true", help='GPS altitude')
     parser.add_argument('--delta', action="store_true", help='Pressure/GPS delta')
     args = parser.parse_args()

@@ -56,7 +56,7 @@ def check_igc(hdr, data):
 
     # Check for >= 4s sampling
     if delta_t > 4:
-        logging.warn("%s sample interval > 4s, %.1f", hdr['id'], delta_t)
+        logging.warning("%s sample interval > 4s, %.1f" % (hdr['id'], delta_t))
         return False
 
     return True
@@ -175,12 +175,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("outfile", type=argparse.FileType('wt'),
                         help="JSON Output file")
-    parser.add_argument('--igc', '-i', nargs='*',
+    parser.add_argument('igc', nargs='+',
                         type=argparse.FileType('r', errors=None),
                         help='IGC files with ellipsoid datum')
-    parser.add_argument('--start', '-s', type=int,
+    parser.add_argument('--start', type=int, required=True,
                         help='UTC start time (format 130415)')
-    parser.add_argument('--stop', '-e', type=int,
+    parser.add_argument('--stop', type=int, required=True,
                         help='UTC end time (format 131030)')
     parser.add_argument('--wind_speed', '-w', type=float, default=0.0,
                         help='Wind speed (kts), default 0kts')
@@ -190,6 +190,8 @@ if __name__ == '__main__':
                         help='Output time sample (s), default 0.1s')
     parser.add_argument('--geoid', '-g', type=float, default=48.0,
                         help='Geoid height (m), default 48m')
+    parser.add_argument('--elev', type=float, required=True,
+                        help='Takeoff elevation')
     parser.add_argument('--diag', action='store_true',
                         help='Make diagnostic plots')
     args = parser.parse_args()
@@ -201,6 +203,7 @@ if __name__ == '__main__':
     logs = []
     ids = []
     for igc_file in args.igc:
+        print(igc_file.name)
         hdr, data = parse_igc(igc_file)
 
         if not check_igc(hdr, data):
@@ -216,8 +219,18 @@ if __name__ == '__main__':
         # Fuse pressure and GPS altitudes
         alt = fuse_altitude(alt_p, alt_g, delta_t_igc)
 
-        # Subtract Geoid height
-        alt = alt - args.geoid
+        # Correct for geoid/ellipsoid altitude reference
+        takeoff_alt = np.mean(alt_g[:10])
+
+        err_geoid = abs(takeoff_alt - args.elev)
+        err_ellip = abs((takeoff_alt - args.geoid) - args.elev)
+
+        if (err_ellip < err_geoid):
+            alt = alt - args.geoid
+
+        min_err = min(err_ellip, err_geoid)
+        if min_err > 10:
+            logging.warning("Elevation error exceeds 10m: %f" % min_err)
 
         # Interpolate and convert to local X/Y/Z coordinates
         t, x, y, z = xyz_resample(utc, lat, lon, alt, args.tdelta)
