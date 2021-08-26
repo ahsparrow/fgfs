@@ -1,5 +1,7 @@
 import argparse
 import csv
+import datetime
+import itertools
 import json
 import logging
 import sys
@@ -171,6 +173,29 @@ def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
     return np.transpose(np.vstack(
         (xec, yec, zec, out[0], out[1], out[2], vx, vy, vz)))
 
+def near_misses(logs, threshold, start, tdelta):
+    for log in itertools.combinations(logs, 2):
+        # Calculate distance between logs
+        xyz1 = np.array([(x[0], x[1], x[2]) for x in log[0]['data']])
+        xyz2 = np.array([(x[0], x[1], x[2]) for x in log[1]['data']])
+        dist = np.linalg.norm(xyz1 - xyz2, axis=1)
+
+        # Find near miss indices
+        idx = np.where(dist < threshold)[0]
+        if len(idx) > 0:
+            print('%s -> %s' % (log[0]['id'], log[1]['id']))
+
+            # Split into non-consecutive time periods
+            hits = np.split(idx, np.where(np.diff(idx) != 1)[0] + 1)
+            for hit in hits:
+                # Find closest approach
+                hit_min_idx = np.argmin(dist[hit])
+                min_idx = hit[hit_min_idx]
+
+                utc = datetime.datetime.utcfromtimestamp(start + min_idx * tdelta)
+                utc_str = utc.strftime("%H:%M:%S")
+                print(utc_str, dist[min_idx])
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("outfile", type=argparse.FileType('wt'),
@@ -194,6 +219,8 @@ if __name__ == '__main__':
                         help='Takeoff elevation')
     parser.add_argument('--diag', action='store_true',
                         help='Make diagnostic plots')
+    parser.add_argument('--dist', type=float, default=0.0,
+                        help='Near miss distance (m)')
     args = parser.parse_args()
 
     # Time parameters
@@ -203,7 +230,7 @@ if __name__ == '__main__':
     logs = []
     ids = []
     for igc_file in args.igc:
-        print(igc_file.name)
+        print("Reading %s" % igc_file.name)
         hdr, data = parse_igc(igc_file)
 
         if not check_igc(hdr, data):
@@ -230,7 +257,7 @@ if __name__ == '__main__':
 
         min_err = min(err_ellip, err_geoid)
         if min_err > 10:
-            logging.warning("Elevation error exceeds 10m: %f" % min_err)
+            logging.warning("Takeoff elevation error exceeds 10m: %.1f" % min_err)
 
         # Interpolate and convert to local X/Y/Z coordinates
         t, x, y, z = xyz_resample(utc, lat, lon, alt, args.tdelta)
@@ -247,11 +274,13 @@ if __name__ == '__main__':
             id = hdr.get('cid') or hdr.get('gid') or hdr['id']
             ids.append(id)
             logs.append({'data': out.tolist(), 'id': id})
+        else:
+            logging.warning("No data found")
 
         # Plot diagnostics
         if args.diag:
             fix, axs = pyplot.subplots(2, 2)
-            axs[0][0].plot(z)
+            axs[0][0].plot(alt_g)
 
             axs[0][1].plot(pitch)
 
@@ -263,5 +292,8 @@ if __name__ == '__main__':
 
             pyplot.show()
 
-    data = {'tdelta': args.tdelta, 'ids': ids, 'logs': logs}
-    json.dump(data, args.outfile)
+    if args.dist > 0:
+        near_misses(logs, args.dist, start, args.tdelta)
+    else:
+        data = {'tdelta': args.tdelta, 'ids': ids, 'logs': logs}
+        json.dump(data, args.outfile)
