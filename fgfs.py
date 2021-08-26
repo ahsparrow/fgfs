@@ -101,7 +101,7 @@ def calc_dynamics(x, y, z, tdelta, wind_speed, wind_dir):
     speed = filter(speed, 5 / tdelta)
 
     # Bank angle
-    omega = np.diff(unwrapped_heading, append=unwrapped_heading[-1:])
+    omega = np.diff(unwrapped_heading, append=unwrapped_heading[-1:]) / tdelta
     theta = np.degrees(np.arctan(omega * speed / 9.81))
 
     av_theta = filter(theta, 5 / tdelta)
