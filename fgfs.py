@@ -47,19 +47,11 @@ def calc_speed(x, td, tavg):
     vs = filter(v, tavg / td)
     return vs
 
-def check_igc(hdr, data):
-    utc = data['utc']
-
+def check_igc(data):
     # Sample interval
-    res = mode(np.diff(utc))
+    res = mode(np.diff(data['utc']))
     delta_t = res.mode[0]
-
-    # Check for >= 4s sampling
-    if delta_t > 4:
-        logging.warning("%s sample interval > 4s, %.1f" % (hdr['id'], delta_t))
-        return False
-
-    return True
+    return delta_t
 
 # Fuse GPS and pressure altitudes
 def fuse_altitude(alt_pressure, alt_gps, delta_t):
@@ -227,15 +219,13 @@ if __name__ == '__main__':
         print("Reading %s" % igc_file.name)
         hdr, data = parse_igc(igc_file)
 
-        if not check_igc(hdr, data):
+        delta_t_igc = check_igc(data)
+        if delta_t_igc > 4:
+            logging.warning("sample interval > 4s, %.1f" % delta_t)
             continue
 
         utc, lat, lon = data['utc'], data['lat'], data['lon']
         alt_p, alt_g = data['alt'], data['alt_gps']
-
-        # IGC file sample interval
-        res = mode(utc[1:] - utc[:-1])
-        delta_t_igc = res.mode[0]
 
         # Fuse pressure and GPS altitudes
         alt = fuse_altitude(alt_p, alt_g, delta_t_igc)
