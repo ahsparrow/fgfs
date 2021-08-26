@@ -8,8 +8,8 @@ import numpy as np
 
 #----------------------------------------------------------------------
 
-def send_msg(port, id, x, y, z, orix, oriy, oriz, vx, vy, vz):
-    model = b'Aircraft/DG-101G/Models/DG-101G.xml'
+def send_msg(port, id, x, y, z, orix, oriy, oriz, vx, vy, vz, aircraft):
+    model = bytes(aircraft, 'utf-8')
     model += bytearray(96 - len(model))
 
     # Not sure what value this should be, but less than this gives jerky
@@ -55,13 +55,11 @@ def send_msg(port, id, x, y, z, orix, oriy, oriz, vx, vy, vz):
     # Make header
     idb = bytes(id[:8], 'ascii')
     hdr = b"FGFS" + \
-          bytearray([0, 1, 0, 1]) +\
-          bytearray([0, 0, 0, 7]) +\
-          bytearray([0, 0, 0, len(data)+32]) +\
-          bytearray([0, 0, 0, 0]) +\
-          bytearray([0, 0, 0, 0]) +\
-          idb + bytearray(8 - len(idb))
-
+          bytearray([0, 1, 0, 1,
+                     0, 0, 0, 7,
+                     0, 0, 0, len(data)+32,
+                     0, 0, 0, 0,
+                     0, 0, 0, 0]) + idb + bytearray(8 - len(idb))
     msg = hdr + data
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -76,7 +74,12 @@ def min_distance(data1, data2):
     return np.min(dist)
 
 # Replay log data
-def replay(id, logs, tdelta, dist, port):
+def replay(id, logs, tdelta, dist, port, aircraft):
+    if aircraft == 'asg29':
+        model = 'Aircraft/ASG29/Models/asg29.xml'
+    else:
+        model = 'Aircraft/DG-101G/Models/DG-101G.xml'
+
     # Find log data
     ref_log = None
     for log in logs:
@@ -103,7 +106,7 @@ def replay(id, logs, tdelta, dist, port):
     for i in range(len(ref_log['data'])):
         for log in replay_logs:
             x, y, z, orix, oriy, oriz, vx, vy, vz = log['data'][i]
-            send_msg(port, log['id'], x, y, z, orix, oriy, oriz, vx, vy, vz)
+            send_msg(port, log['id'], x, y, z, orix, oriy, oriz, vx, vy, vz, model)
 
         time.sleep(tdelta)
 
@@ -120,6 +123,8 @@ if __name__ == '__main__':
             help='FG port number')
     parser.add_argument('--list', '-l', action='store_true',
             help='print list of IDs in file')
+    parser.add_argument('--aircraft', '-a', choices=['dg101', 'asg29'],
+            default='asg29', help='aircraft model')
 
     args = parser.parse_args()
 
@@ -128,4 +133,4 @@ if __name__ == '__main__':
         print(", ".join(data['ids']))
         sys.exit(0)
 
-    replay(args.id, data['logs'], data['tdelta'], args.dist, args.port)
+    replay(args.id, data['logs'], data['tdelta'], args.dist, args.port, args.aircraft)
