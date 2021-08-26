@@ -43,9 +43,7 @@ def parse_utc(utc):
 
 # Caculate speed from 1-D array of positions
 def calc_speed(x, td, tavg):
-    v = (x[1:] - x[:-1]) / td
-    v = np.append(v, v[-1])
-
+    v = np.diff(x, append=x[-1:]) / td
     vs = filter(v, tavg / td)
     return vs
 
@@ -53,7 +51,7 @@ def check_igc(hdr, data):
     utc = data['utc']
 
     # Sample interval
-    res = mode(utc[1:] - utc[:-1])
+    res = mode(np.diff(utc))
     delta_t = res.mode[0]
 
     # Check for >= 4s sampling
@@ -99,29 +97,25 @@ def calc_dynamics(x, y, z, tdelta, wind_speed, wind_dir):
     yw = y + wind_y
 
     # Calculate heading
-    xdelta = xw[1:] - xw[:-1]
-    ydelta = yw[1:] - yw[:-1]
+    xdelta = np.diff(xw, append=xw[-1:])
+    ydelta = np.diff(yw, append=yw[-1:])
     heading = np.degrees(np.arctan2(xdelta, ydelta))
-    heading = np.append(heading, heading[-1])
 
     unwrapped_heading = np.unwrap(np.radians(heading))
     av_unwrapped_heading = filter(unwrapped_heading, 4 / tdelta)
 
     # Calculate speed
     speed = np.sqrt(xdelta ** 2  + ydelta ** 2) / tdelta
-    speed = np.append(speed, speed[-1])
     speed = filter(speed, 5 / tdelta)
 
     # Bank angle
-    omega = (unwrapped_heading[1:] - unwrapped_heading[:-1]) / tdelta
-    omega = np.append(omega, omega[-1])
+    omega = np.diff(unwrapped_heading, append=unwrapped_heading[-1:])
     theta = np.degrees(np.arctan(omega * speed / 9.81))
 
     av_theta = filter(theta, 5 / tdelta)
 
     # Pitch angle
-    zdelta = z[1:] - z[:-1]
-    zdelta = np.append(zdelta, zdelta[-1])
+    zdelta = np.diff(z, append=z[-1:])
     pitch = np.degrees(zdelta / (speed * tdelta))
     pitch = filter(pitch, 2 / tdelta)
 
