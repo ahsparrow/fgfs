@@ -147,7 +147,7 @@ def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch, xyz_only=
 
         # Rotate to view
         rot = Rotation.from_euler("zyx", [-lon, lat, 0], degrees=True)
-        view_attitude = rot.apply(init_attitude)
+        view_attitude = rot.apply(view_attitude)
 
         # Swap axes
         rot = Rotation.from_euler("zyx", [0, 90, 0], degrees=True)
