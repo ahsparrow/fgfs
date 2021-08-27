@@ -114,7 +114,7 @@ def calc_dynamics(x, y, z, tdelta, wind_speed, wind_dir):
     return xw, yw, np.mod(np.degrees(av_unwrapped_heading), 360), av_theta, pitch 
 
 # Create FGFS data
-def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
+def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch, xyz_only=False):
     try:
         # Get start/stop indices
         n = np.where(t == start)[0][0]
@@ -134,28 +134,36 @@ def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
     vy = calc_speed(yec, tdelta, 5)
     vz = calc_speed(zec, tdelta, 5)
 
-    # Rotate orientation from local to ECEF
-    ori_arr = []
-    for i in range(n, m):
-        # Init
-        attitude = Rotation.from_euler("zyx", [0, 0, 0], degrees=True).as_matrix()
+    # Rotation
+    if xyz_only:
+        # XYZ only - to speed up near miss calculation
+        ori_arr = np.zeros((m - n, 3))
+    else:
+        # Rotate orientation from local to ECEF
+        ori_arr = []
+
+        # Initial orientation
+        view_attitude = Rotation.from_euler("zyx", [0, 0, 0], degrees=True).as_matrix()
 
         # Rotate to view
         rot = Rotation.from_euler("zyx", [-lon, lat, 0], degrees=True)
-        attitude = rot.apply(attitude)
+        view_attitude = rot.apply(init_attitude)
 
-        # Set attitude
+        # Swap axes
         rot = Rotation.from_euler("zyx", [0, 90, 0], degrees=True)
-        attitude = rot.apply(attitude)
+        view_attitude = rot.apply(view_attitude)
 
-        rot = Rotation.from_euler("zyx", [-heading[i], -pitch[i], -roll[i]], degrees=True)
-        attitude = rot.apply(attitude)
+        for i in range(n, m):
+            # Set attitude
+            rot = Rotation.from_euler("zyx", [-heading[i], -pitch[i], -roll[i]], degrees=True)
+            ecef_attitude = rot.apply(view_attitude)
 
-        # Convert to rotation vector
-        ori = Rotation.from_matrix(attitude).as_rotvec()
-        ori_arr.append(ori)
+            # Convert to rotation vector
+            ori = Rotation.from_matrix(ecef_attitude).as_rotvec()
+            ori_arr.append(ori)
 
     out = np.array(ori_arr).transpose()
+
     return np.transpose(np.vstack(
         (xec, yec, zec, out[0], out[1], out[2], vx, vy, vz)))
 
@@ -180,7 +188,7 @@ def near_misses(logs, threshold, start, tdelta):
 
                 utc = datetime.datetime.utcfromtimestamp(start + min_idx * tdelta)
                 utc_str = utc.strftime("%H:%M:%S")
-                print(utc_str, dist[min_idx])
+                print("%s %.1f" % (utc_str, dist[min_idx]))
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -252,7 +260,8 @@ if __name__ == '__main__':
 
         # Get data for FGFS
         out = fgfs_data(lat.mean(), lon.mean(),
-                start, stop, t, x, y, z, heading, roll, pitch)
+                start, stop, t, x, y, z, heading, roll, pitch,
+                xyz_only=(args.dist != 0))
 
         if not out is None:
             id = hdr.get('cid') or hdr.get('gid') or hdr['id']
