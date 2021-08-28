@@ -77,6 +77,10 @@ def min_distance(data1, data2):
 def replay(id, logs, tdelta, dist, port, aircraft):
     if aircraft == 'asg29':
         model = 'Aircraft/ASG29/Models/asg29.xml'
+    elif aircraft == 'spitfire':
+        model = 'Aircraft/Spitfire/Models/spitfire_model.xml'
+    elif aircraft == 'lego':
+        model = 'Aircraft/ogel/Models/SinglePiston.xml'
     else:
         model = 'Aircraft/DG-101G/Models/DG-101G.xml'
 
@@ -123,7 +127,7 @@ if __name__ == '__main__':
             help='FG port number')
     parser.add_argument('--list', '-l', action='store_true',
             help='print list of IDs in file')
-    parser.add_argument('--aircraft', '-a', choices=['dg101', 'asg29'],
+    parser.add_argument('--aircraft', '-a', choices=['dg101', 'asg29', 'spitfire', 'lego'],
             default='asg29', help='aircraft model')
 
     args = parser.parse_args()
