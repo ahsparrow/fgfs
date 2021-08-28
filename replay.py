@@ -14,7 +14,7 @@ def send_msg(port, id, x, y, z, orix, oriy, oriz, vx, vy, vz, aircraft):
 
     # Not sure what value this should be, but less than this gives jerky
     # playback
-    lag = 0.05
+    lag = 0.1
 
     # Pack XDR data
     packer = xdrlib.Packer()
