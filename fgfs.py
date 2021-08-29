@@ -227,6 +227,10 @@ if __name__ == '__main__':
         print("Reading %s" % igc_file.name)
         hdr, data = parse_igc(igc_file)
 
+        # Bug in some loggers - remove duplicate samples
+        u, idx = np.unique(data['utc'], return_index=True)
+        data = data[idx]
+
         delta_t_igc = check_igc(data)
         if delta_t_igc > 4:
             logging.warning("sample interval > 4s, %.1f" % delta_t)
