@@ -12,6 +12,7 @@ class App(tk.Frame):
 
         self.replay = replay
         self.log_len = replay.log_len
+        self.tdelta = replay.tdelta
 
         self._root().title("Replay")
 
@@ -26,12 +27,16 @@ class App(tk.Frame):
 
     def create_widgets(self):
         self.scale = tk.Scale(self, from_=0, to=(self.log_len - 1),
-                orient=tk.HORIZONTAL, command=self.scale)
-        self.scale.showvalue = False
+                showvalue=False, orient=tk.HORIZONTAL, command=self.scale)
         self.scale.bind('<Button-1>', self.button_press)
         self.scale.bind('<ButtonRelease-1>', self.button_release)
-        self.scale.grid(row=0, column=0, columnspan=6, padx=8, pady=(8, 0),
+        self.scale.grid(row=0, column=0, columnspan=5, padx=(8, 0), pady=(8, 0),
                 sticky=tk.E+tk.W)
+
+        self.label_var = tk.StringVar()
+        self.label_var.set('0:00')
+        label = tk.Label(self, textvariable=self.label_var)
+        label.grid(row=0, column=5, padx=(8, 8), pady=(8, 0))
 
         button = tk.Button(self, text='<<', command=self.transport(-10))
         button.grid(row=1, column=0, padx=(8, 0), pady=8)
@@ -88,8 +93,11 @@ class App(tk.Frame):
 
         self.scale.set(self.count)
 
+        secs = self.count * self.tdelta
+        self.label_var.set("%d:%04.1f" % (secs // 60, secs % 60))
+
         self.replay.replay(self.count, freeze=freeze)
-        self.after(100, self.tick)
+        self.after(int(self.tdelta * 1000), self.tick)
 
 if __name__ == '__main__':
     import argparse
