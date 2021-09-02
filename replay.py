@@ -150,6 +150,6 @@ if __name__ == '__main__':
     replay_logs = find_logs(args.id, data['logs'], args.dist)
 
     replay = Replay(replay_logs, tdelta, args.aircraft, args.port)
-    for i in range(replay.log_size):
+    for i in range(replay.log_len):
         replay.replay(i)
         time.sleep(tdelta)
