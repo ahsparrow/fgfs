@@ -1,0 +1,129 @@
+<?xml version="1.0"?>
+<PropertyList>
+ <input><keyboard>
+   <key n="356">
+    <name>Left</name>
+    <desc>Move aileron left (or adjust AP heading.)</desc>
+    <repeatable type="bool">true</repeatable>
+    <binding>
+     <command>nasal</command>
+     <script>
+      if (getprop("/sim/freeze/replay-state"))
+      controls.replaySkip(-5);
+      else
+      controls.incAileron(-0.05, -1.0)
+     </script>
+    </binding>
+    <mod-shift>
+     <desc>Look left</desc>
+     <binding>
+      <command>property-assign</command>
+      <property>/sim/current-view/goal-heading-offset-deg</property>
+      <property>/sim/view/config/left-direction-deg</property>
+     </binding>
+    </mod-shift>
+    <mod-alt>
+     <desc>View Left</desc>
+     <binding>
+      <command>property-adjust</command>
+      <property>/sim/current-view/goal-heading-offset-deg</property>
+      <step type="double">5</step>
+     </binding>
+    </mod-alt>
+   </key>
+
+   <key n="357">
+    <name>Up</name>
+    <desc>Elevator down or decrease autopilot altitude</desc>
+    <repeatable type="bool">true</repeatable>
+    <binding>
+     <command>nasal</command>
+     <script>
+      if (getprop("/sim/freeze/replay-state"))
+      controls.speedup(1);
+      else
+      controls.incElevator(0.05, -100)
+     </script>
+    </binding>
+    <mod-shift>
+     <desc>Look forward</desc>
+     <binding>
+      <command>property-assign</command>
+      <property>/sim/current-view/goal-heading-offset-deg</property>
+      <property>/sim/view/config/front-direction-deg</property>
+     </binding>
+    </mod-shift>
+    <mod-alt>
+     <desc>View Up</desc>
+     <binding>
+      <command>property-adjust</command>
+      <property>/sim/current-view/goal-pitch-offset-deg</property>
+      <step type="double">5</step>
+     </binding>
+    </mod-alt>
+   </key>
+
+   <key n="358">
+    <name>Right</name>
+    <desc>Move aileron right (or adjust AP heading.)</desc>
+    <repeatable type="bool">true</repeatable>
+    <binding>
+     <command>nasal</command>
+     <script>
+      if (getprop("/sim/freeze/replay-state"))
+      controls.replaySkip(5);
+      else
+      controls.incAileron(0.05, 1.0)
+     </script>
+     <step type="double">0.05</step>
+    </binding>
+    <mod-shift>
+     <desc>Look right</desc>
+     <binding>
+      <command>property-assign</command>
+      <property>/sim/current-view/goal-heading-offset-deg</property>
+      <property>/sim/view/config/right-direction-deg</property>
+     </binding>
+    </mod-shift>
+    <mod-alt>
+     <desc>View right</desc>
+     <binding>
+      <command>property-adjust</command>
+      <property>/sim/current-view/goal-heading-offset-deg</property>
+      <step type="double">-5</step>
+     </binding>
+    </mod-alt>
+   </key>
+
+   <key n="359">
+    <name>Down</name>
+    <desc>Elevator up or increase autopilot altitude</desc>
+    <repeatable type="bool">true</repeatable>
+    <binding>
+     <command>nasal</command>
+     <script>
+      if (getprop("/sim/freeze/replay-state"))
+      controls.speedup(-1);
+      else
+      controls.incElevator(-0.05, 100)
+     </script>
+    </binding>
+    <mod-shift>
+     <desc>Look backwards</desc>
+     <binding>
+      <command>property-assign</command>
+      <property>/sim/current-view/goal-heading-offset-deg</property>
+      <property>/sim/view/config/back-direction-deg</property>
+     </binding>
+    </mod-shift>
+    <mod-alt>
+     <desc>View Down</desc>
+     <binding>
+      <command>property-adjust</command>
+      <property>/sim/current-view/goal-pitch-offset-deg</property>
+      <step type="double">-5</step>
+     </binding>
+    </mod-alt>
+   </key>
+ </keyboard></input>
+</PropertyList>

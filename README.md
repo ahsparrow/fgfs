@@ -18,4 +18,11 @@ Generate flight file
 
 Replay to FGFS (showing aircraft within 300m of HOY)
 
-    python replay.py data.json HOY --dist 300
+    python gui.py data.json HOY --dist 300
+
+## Flightgear config
+
+Run Flightgear with
+
+    ./FlightGear-2020.3.11-x86_64.AppImage \
+        --config=/home/ahs/src/fgfs/nas/config.xml --launcher
