@@ -1,6 +1,6 @@
 import argparse
 import csv
-import datetime
+from datetime import datetime as dt
 import itertools
 import json
 import logging
@@ -36,7 +36,7 @@ def filter(data, n):
 
 # Parse IGC UTC value
 def parse_utc(utc):
-    h, ms = divmod(utc, 10000)
+    h, ms = divmod(int(utc), 10000)
     m, s = divmod(ms, 100)
 
     return h * 3600 + m * 60 + s
@@ -186,7 +186,7 @@ def near_misses(logs, threshold, start, tdelta):
                 hit_min_idx = np.argmin(dist[hit])
                 min_idx = hit[hit_min_idx]
 
-                utc = datetime.datetime.utcfromtimestamp(start + min_idx * tdelta)
+                utc = dt.utcfromtimestamp(start + min_idx * tdelta)
                 utc_str = utc.strftime("%H:%M:%S")
                 print("%s %.1f" % (utc_str, dist[min_idx]))
 
@@ -197,9 +197,9 @@ if __name__ == '__main__':
     parser.add_argument('igc', nargs='+',
                         type=argparse.FileType('r', errors=None),
                         help='IGC files with ellipsoid datum')
-    parser.add_argument('--start', type=int, required=True,
+    parser.add_argument('--start', required=True,
                         help='UTC start time (format 130415)')
-    parser.add_argument('--stop', type=int, required=True,
+    parser.add_argument('--stop', required=True,
                         help='UTC end time (format 131030)')
     parser.add_argument('--wind_speed', '-w', type=float, default=0.0,
                         help='Wind speed (kts), default 0kts')
@@ -271,6 +271,8 @@ if __name__ == '__main__':
             id = hdr.get('cid') or hdr.get('gid') or hdr['id']
             ids.append(id)
             logs.append({'data': out.tolist(), 'id': id})
+
+            log_date = hdr.get('dte')
         else:
             logging.warning("No data found")
 
@@ -292,5 +294,7 @@ if __name__ == '__main__':
     if args.dist > 0:
         near_misses(logs, args.dist, start, args.tdelta)
     else:
-        data = {'tdelta': args.tdelta, 'ids': ids, 'logs': logs}
+        start_time = dt.strptime(log_date + args.start, '%d%m%y%H%M%S').isoformat()
+        data = {'start': start_time, 'tdelta': args.tdelta, 'ids': ids,
+                'logs': logs}
         json.dump(data, args.outfile)

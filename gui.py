@@ -112,9 +112,17 @@ if __name__ == '__main__':
             help='FG port number')
     parser.add_argument('--aircraft', '-a', choices=['dg101', 'asg29', 'spitfire', 'lego'],
             default='asg29', help='aircraft model')
+    parser.add_argument('--info', action='store_true',
+            help='print log info')
     args = parser.parse_args()
 
     data = json.load(args.file)
+
+    print("Start: %s" % data['start'])
+    print("Logs: %s" % ", ".join(data['ids']))
+    if args.info:
+        sys.exit(0)
+
     tdelta = data['tdelta']
 
     replay_logs = replay.find_logs(args.id, data['logs'], args.dist)

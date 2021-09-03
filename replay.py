@@ -113,12 +113,13 @@ def find_logs(id, logs, dist):
     replay_logs = [ref_log]
 
     # Find close encounters
+    print("Minimum distances:")
     for log in logs:
         log_id = log['id']
         if log_id != id:
             mdist = min_distance(ref_log['data'], log['data'])
             if mdist <= dist:
-                print("Adding log " + log_id + ", min distance %d" % mdist)
+                print("  Adding log " + log_id + ", minimum distance %d m" % mdist)
                 replay_logs.append(log)
 
     return replay_logs
