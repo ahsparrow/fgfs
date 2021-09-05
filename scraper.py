@@ -5,8 +5,7 @@ import re
 from bs4 import BeautifulSoup
 import requests
 
-def get_logs(comp, day, log_dir):
-    url = 'https://www.soaringspot.com/en_gb/%s/results/%s/daily' % (args.comp, args.day)
+def get_logs(url, log_dir):
     req = requests.get(url)
 
     soup = BeautifulSoup(req.text, "html.parser")
@@ -30,9 +29,8 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("comp", help='Competition part of Soaring Spot URL')
-    parser.add_argument("day", help='Class/day part of Soaring Spot URL')
+    parser.add_argument("url", help='Soaring Spot URL')
     parser.add_argument("log_dir", help="Directory to store IGC files")
     args = parser.parse_args()
 
-    get_logs(args.comp, args.day, args.log_dir)
+    get_logs(args.url, args.log_dir)
