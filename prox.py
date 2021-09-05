@@ -27,7 +27,7 @@ def find_near_misses(logs, threshold):
         data1 = speed_filter(log1['data'], 10)
         data2 = speed_filter(log2['data'], 10)
 
-        # Find command time samples
+        # Find common time samples
         t1, x1, y1, z1 = np.transpose(data1)
         t2, x2, y2, z2 = np.transpose(data2)
         i, c1, c2 = np.intersect1d(t1, t2, return_indices=True)
@@ -53,7 +53,7 @@ def find_near_misses(logs, threshold):
                 hit_min_idx = np.argmin(dist[hit])
                 min_idx = hit[hit_min_idx]
 
-                utc = dt.utcfromtimestamp(t1[min_idx])
+                utc = dt.utcfromtimestamp(t1[c1[min_idx]])
                 utc_str = utc.strftime("%H:%M:%S")
                 print("  %s %.1fm" % (utc_str, dist[min_idx]))
 
