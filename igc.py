@@ -7,13 +7,6 @@ from scipy.interpolate import splrep, splev
 EPSG_WGS84 = 4326
 EPSG_XY = 3035
 
-def check(data):
-    # Sample interval
-    duration = data['utc'][-1] - data['utc'][0]
-    delta = duration / (len(data['utc']) - 1)
-
-    return round(delta)
-
 # Apply simple running average
 def boxcar(data, n):
     # Filter length must be odd
@@ -29,15 +22,65 @@ def boxcar(data, n):
     out = np.convolve(d, kernel, mode='valid')
     return out
 
-# Fuse GPS and pressure altitudes
-def fuse_altitude(alt_pressure, alt_gps, delta_t):
-    delta_alt = boxcar(alt_gps - alt_pressure, 60 / delta_t)
-    alt_fuse = alt_pressure + delta_alt
+# Caculate speed from 1-D array of positions
+def speed(x, td, tavg):
+    v = np.diff(x, append=x[-1:]) / td
+    vs = boxcar(v, tavg / td)
+    return vs
 
-    return alt_fuse
+def get_tdelta(utc):
+    # Sample interval
+    duration = utc[-1] - utc[0]
+    delta = duration / (len(utc) - 1)
+
+    return round(delta)
+
+# Convert altitude from ellipsoid to geoid (if necessary)
+def check_geoid(alt, elevation, geoid):
+    takeoff_alt = np.mean(alt[:10])
+
+    err_geoid = abs(takeoff_alt - elevation)
+    err_ellip = abs((takeoff_alt - geoid) - elevation)
+
+    if (err_ellip < err_geoid):
+        alt = alt - geoid
+    else:
+        # IGC loggers should use ellipsoid altitude, but many don't
+        logging.warning("geoid reference")
+
+    min_err = min(err_ellip, err_geoid)
+    if min_err > 10:
+        logging.warning("takeoff elevation error exceeds 10 m: %.1f m" % min_err)
+
+    return alt
+
+# Calculate 'calibrated' pressure altitude
+def calibrate_altitude(alt_pressure, alt_gps):
+    # Calibrate 100m intervals
+    bin_size = 100
+
+    # Digitise pressure altitude into 'bin_size' bins
+    min_alt = (np.min(alt_pressure) // bin_size) * bin_size
+    max_alt = (np.max(alt_pressure) // bin_size + 1) * bin_size
+    bins = np.arange(min_alt, max_alt + bin_size, bin_size)
+    n_bins = len(bins)
+
+    inds = np.digitize(alt_pressure, bins)
+
+    # Calculate average error for each pressure altitude bin
+    error = alt_gps -  alt_pressure
+    avg_errors = [np.mean(error[np.where(inds == b)]) for b in range(1, n_bins)]
+
+    # Fit polynomial to pressure alt vs error
+    poly = np.polynomial.Polynomial.fit(bins[:-1] + bin_size / 2, avg_errors, deg=3)
+
+    # Correct pressure altitude for GPS 'calibration'
+    alt = alt_pressure + poly(alt_pressure)
+
+    return alt
 
 # Convert to local X/Y coordinates and resample data
-def xyz_resample(utc, lat, lon, alt, resample_t):
+def resample_xyz(utc, lat, lon, alt, resample_t):
     # Convert to local x/y coordinates
     transformer = Transformer.from_crs(EPSG_WGS84, EPSG_XY)
     y, x = transformer.transform(lat, lon)
@@ -51,41 +94,6 @@ def xyz_resample(utc, lat, lon, alt, resample_t):
     z1 = splev(t, splrep(utc, alt, s=0), der=0)
 
     return t, x1, y1, z1
-
-# Caculate speed from 1-D array of positions
-def speed(x, td, tavg):
-    v = np.diff(x, append=x[-1:]) / td
-    vs = boxcar(v, tavg / td)
-    return vs
-
-def interpolate_xyz(hdr, data, tdelta_igc, tdelta, elevation, geoid):
-    # Bug in some loggers - remove duplicate samples
-    u, idx = np.unique(data['utc'], return_index=True)
-    data = data[idx]
-
-    utc, lat, lon = data['utc'], data['lat'], data['lon']
-    alt_p, alt_g = data['alt'], data['alt_gps']
-
-    # Fuse pressure and GPS altitudes
-    alt = fuse_altitude(alt_p, alt_g, tdelta_igc)
-
-    # Correct for geoid/ellipsoid altitude reference
-    takeoff_alt = np.mean(alt_g[:10])
-
-    err_geoid = abs(takeoff_alt - elevation)
-    err_ellip = abs((takeoff_alt - geoid) - elevation)
-
-    if (err_ellip < err_geoid):
-        alt = alt - geoid
-
-    min_err = min(err_ellip, err_geoid)
-    if min_err > 10:
-        logging.warning("Takeoff elevation error exceeds 10 m: %.1f m" % min_err)
-
-    # Interpolate and convert to local X/Y/Z coordinates
-    t, x, y, z = xyz_resample(utc, lat, lon, alt, tdelta)
-
-    return t, x, y, z
 
 # Calculate flight dynamics, heading, roll, etc.
 def dynamics(x, y, z, tdelta, wind_speed, wind_dir):

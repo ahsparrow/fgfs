@@ -74,14 +74,25 @@ if __name__ == '__main__':
         hdr, data = parse_igc(igc_file)
         id = hdr.get('cid') or hdr.get('gid') or hdr['id']
 
-        tdelta_igc = igc.check(data)
+        # Discard first few samples
+        data = data[5:]
+
+        utc, lat, lon = data['utc'], data['lat'], data['lon']
+        alt_pressure, alt_gps = data['alt'], data['alt_gps']
+
+        tdelta_igc = igc.get_tdelta(utc)
         if tdelta_igc > 4:
-            logging.warning("sample interval > 4 s, %d s" % tdelta_igc)
+            logging.warning("skipping, sample interval > 4 s, %d s" % tdelta_igc)
             continue
 
-        # Convert to X/Y/Z
-        t, x, y, z = igc.interpolate_xyz(hdr, data, tdelta_igc, TDELTA,
-                args.elevation, args.geoid)
+        # Convert to geoid referenced GPS
+        alt_geoid = igc.check_geoid(alt_gps, args.elevation, args.geoid)
+
+        # Convert to calibrated pressure altitude
+        alt = igc.calibrate_altitude(alt_pressure, alt_geoid)
+
+        # Convert and interpolate to local X/Y/Z
+        t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, TDELTA)
 
         data = np.transpose(np.vstack((t, x, y, z)))
         logs.append({'id': id, 'data': data})

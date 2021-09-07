@@ -108,15 +108,26 @@ if __name__ == '__main__':
         hdr, data = parse_igc(igc_file)
         id = hdr.get('cid') or hdr.get('gid') or hdr['id']
 
+        # Discard first few samples
+        data = data[5:]
+
+        utc, lat, lon = data['utc'], data['lat'], data['lon']
+        alt_pressure, alt_gps = data['alt'], data['alt_gps']
+
         # Get sample interval
-        tdelta_igc = igc.check(data)
+        tdelta_igc = igc.get_tdelta(utc)
         if tdelta_igc > 4:
-            logging.warning("sample interval > 4 s, %d s" % tdelta_igc)
+            logging.warning("skipping, sample interval > 4 s, %d s" % tdelta_igc)
             continue
 
+        # Convert to geoid referenced GPS
+        alt_geoid = igc.check_geoid(alt_gps, args.elevation, args.geoid)
+
+        # Convert to calibrated pressure altitude
+        alt = igc.calibrate_altitude(alt_pressure, alt_geoid)
+
         # Convert and interpolate to local X/Y/Z
-        t, x, y, z = igc.interpolate_xyz(hdr, data, tdelta_igc, args.tdelta,
-                args.elevation, args.geoid)
+        t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, args.tdelta)
 
         # Calculate flight dynamics
         x1, y1, heading, roll, pitch = igc.dynamics(x, y, z, args.tdelta,
@@ -137,16 +148,16 @@ if __name__ == '__main__':
 
                 log_date = hdr.get('dte')
             else:
-                logging.warning("No data found")
+                logging.warning("no data found")
         else:
             # Diagnostic plots
             from matplotlib import pyplot
 
             # Plot diagnostics
             fix, axs = pyplot.subplots(2, 2)
-            axs[0][0].plot(data['alt_gps'])
+            axs[0][0].plot(alt_gps)
 
-            axs[0][1].plot(pitch)
+            axs[0][1].plot(alt_gps - alt)
 
             axs[1][0].plot(x, y)
             axs[1][0].set_aspect('equal')

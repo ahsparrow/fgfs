@@ -92,6 +92,10 @@ def parse_igc(igc_file):
     for id, dtype in add_types:
         data[id] = igc[id]
 
+    # Bug in some loggers - remove duplicate time samples
+    u, idx = np.unique(data['utc'], return_index=True)
+    data = data[idx]
+
     return header, data
 
 if __name__ == "__main__":
