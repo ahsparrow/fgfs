@@ -55,7 +55,7 @@ def check_geoid(alt, elevation, geoid):
     return alt
 
 # Calculate 'calibrated' pressure altitude
-def calibrate_altitude(alt_pressure, alt_gps):
+def calibrate_altitude(alt_pressure, alt_gps, errors=False):
     # Calibrate 100m intervals
     bin_size = 100
 
@@ -77,7 +77,10 @@ def calibrate_altitude(alt_pressure, alt_gps):
     # Correct pressure altitude for GPS 'calibration'
     alt = alt_pressure + cal
 
-    return alt, avg_errors
+    if errors:
+        return alt, avg_errors
+    else:
+        return alt
 
 # Convert to local X/Y coordinates and resample data
 def resample_xyz(utc, lat, lon, alt, resample_t):
