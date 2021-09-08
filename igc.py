@@ -71,13 +71,13 @@ def calibrate_altitude(alt_pressure, alt_gps):
     error = alt_gps -  alt_pressure
     avg_errors = [np.mean(error[np.where(inds == b)]) for b in range(1, n_bins)]
 
-    # Fit polynomial to pressure alt vs error
-    poly = np.polynomial.Polynomial.fit(bins[:-1] + bin_size / 2, avg_errors, deg=3)
+    # Calculate calibration using simple linear interpolation
+    cal = np.interp(alt_pressure, bins[:-1] + bin_size / 2, avg_errors)
 
     # Correct pressure altitude for GPS 'calibration'
-    alt = alt_pressure + poly(alt_pressure)
+    alt = alt_pressure + cal
 
-    return alt
+    return alt, avg_errors
 
 # Convert to local X/Y coordinates and resample data
 def resample_xyz(utc, lat, lon, alt, resample_t):

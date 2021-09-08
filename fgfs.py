@@ -124,7 +124,7 @@ if __name__ == '__main__':
         alt_geoid = igc.check_geoid(alt_gps, args.elevation, args.geoid)
 
         # Convert to calibrated pressure altitude
-        alt = igc.calibrate_altitude(alt_pressure, alt_geoid)
+        alt, cal_errors = igc.calibrate_altitude(alt_pressure, alt_geoid)
 
         # Convert and interpolate to local X/Y/Z
         t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, args.tdelta)
@@ -157,7 +157,7 @@ if __name__ == '__main__':
             fix, axs = pyplot.subplots(2, 2)
             axs[0][0].plot(alt_gps)
 
-            axs[0][1].plot(alt_gps - alt)
+            axs[0][1].plot(cal_errors)
 
             axs[1][0].plot(x, y)
             axs[1][0].set_aspect('equal')
