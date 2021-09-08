@@ -124,7 +124,8 @@ if __name__ == '__main__':
         alt_geoid = igc.check_geoid(alt_gps, args.elevation, args.geoid)
 
         # Convert to calibrated pressure altitude
-        alt, cal_errors = igc.calibrate_altitude(alt_pressure, alt_geoid)
+        alt, cal_errors = igc.calibrate_altitude(alt_pressure, alt_geoid,
+                errors=True)
 
         # Convert and interpolate to local X/Y/Z
         t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, args.tdelta)
@@ -136,7 +137,7 @@ if __name__ == '__main__':
         if args.file:
             # Output data for Flightgear
             start = parse_utc(args.start)
-            stop = parse_utc(args.start + args.duration)
+            stop = start + args.duration
 
             # Get data for FGFS
             out = fgfs_data(data['lat'].mean(), data['lon'].mean(),
