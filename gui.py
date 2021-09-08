@@ -103,11 +103,11 @@ if __name__ == '__main__':
     import argparse
 
     parser = argparse.ArgumentParser()
+    parser.add_argument('id', help='id to replay')
     parser.add_argument('file', type=argparse.FileType('r'),
             help='JSON data file')
-    parser.add_argument('id', nargs='?', help='id to replay')
     parser.add_argument('--dist', '-d', type=int, default=0,
-            help='add if within distance (m)')
+            help='add others if within distance (m)')
     parser.add_argument('--port', '-p', type=int, default=5124,
             help='FG port number')
     parser.add_argument('--aircraft', '-a', choices=['dg101', 'asg29', 'spitfire', 'lego'],
