@@ -31,6 +31,8 @@ from igcparser import parse_igc
 
 EPSG_ECEF = 4978
 
+TDELTA = 0.1
+
 # Parse IGC UTC value
 def parse_utc(utc):
     h, ms = divmod(int(utc), 10000)
@@ -39,9 +41,10 @@ def parse_utc(utc):
     return h * 3600 + m * 60 + s
 
 # Create FGFS data
-def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
+def format_fgfs(lat, lon, start, duration, t, x, y, z, heading, roll, pitch):
     try:
         # Get start/stop indices
+        stop = start + duration
         n = np.where(t == start)[0][0]
         m = np.where(t == stop)[0][0]
     except IndexError:
@@ -60,9 +63,6 @@ def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
     vz = igc.speed(zec, tdelta, 5)
 
     # Rotate orientation from local to ECEF
-    ori_arr = []
-
-    # Initial orientation
     view_attitude = Rotation.from_euler("zyx", [0, 0, 0], degrees=True).as_matrix()
 
     # Rotate to view
@@ -73,43 +73,45 @@ def fgfs_data(lat, lon, start, stop, t, x, y, z, heading, roll, pitch):
     rot = Rotation.from_euler("zyx", [0, 90, 0], degrees=True)
     view_attitude = rot.apply(view_attitude)
 
+    orientations = []
     for i in range(n, m):
         # Set attitude
         rot = Rotation.from_euler("zyx", [-heading[i], -pitch[i], -roll[i]], degrees=True)
         ecef_attitude = rot.apply(view_attitude)
 
         # Convert to rotation vector
-        ori = Rotation.from_matrix(ecef_attitude).as_rotvec()
-        ori_arr.append(ori)
+        orientation = Rotation.from_matrix(ecef_attitude).as_rotvec()
+        orientations.append(orientation)
 
-    out = np.array(ori_arr).transpose()
+    orientations = np.array(orientations).transpose()
 
-    return np.transpose(np.vstack(
-        (xec, yec, zec, out[0], out[1], out[2], vx, vy, vz)))
+    # Combine data into 2D array
+    fgfs_data = np.transpose(np.vstack(
+        (xec, yec, zec, orientations[0], orientations[1], orientations[2], vx, vy, vz)))
+
+    return fgfs_data
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('elevation', type=float, help='Takeoff elevation')
+    parser.add_argument('elevation', type=float, help='takeoff elevation (m)')
     parser.add_argument('igc', nargs='+',
                         type=argparse.FileType('r', errors=None),
                         help='IGC log file')
     group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('-d', '--diag', action='store_true',
+                        help='diagnostic plots')
     group.add_argument('-f', '--file', type=argparse.FileType('wt'),
                         help="JSON Output file")
-    group.add_argument('--diag', action='store_true',
-                        help='Make diagnostic plots')
     parser.add_argument('-s', '--start', type=int,
                         help='UTC start time (format 130415)')
-    parser.add_argument('-d', '--duration', type=int,
-                        help='Duration (s)')
-    parser.add_argument('-t', '--tdelta', type=float, default=0.1,
-                        help='Output time sample (s), default 0.1 s')
-    parser.add_argument('-w',  '--wind_speed', type=float, default=0.0,
-                        help='Wind speed (kts), default 0 kts')
-    parser.add_argument('-r', '--wind_dir', type=float, default=0.0,
-                        help='Wind direction')
+    parser.add_argument('-t', '--duration', type=int,
+                        help='duration (s)')
+    parser.add_argument('-w', '--wind_dir', type=float, default=0.0,
+                        help='wind direction')
+    parser.add_argument('-v',  '--wind_speed', type=float, default=0.0,
+                        help='wind speed (kts), default 0 kts')
     parser.add_argument('-g', '--geoid', type=float, default=48.0,
-                        help='Geoid height (m), default 48 m')
+                        help='geoid height (m), default 48 m')
     args = parser.parse_args()
 
     if args.file and not (args.start and args.duration):
@@ -145,20 +147,19 @@ if __name__ == '__main__':
                 errors=True)
 
         # Convert and interpolate to local X/Y/Z
-        t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, args.tdelta)
+        t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, TDELTA)
 
         # Calculate flight dynamics
-        x1, y1, heading, roll, pitch = igc.dynamics(x, y, z, args.tdelta,
+        x1, y1, heading, roll, pitch = igc.dynamics(x, y, z, TDELTA,
                 args.wind_speed, args.wind_dir)
 
         if args.file:
             # Output data for Flightgear
             start = parse_utc(args.start)
-            stop = start + args.duration
 
             # Get data for FGFS
-            out = fgfs_data(data['lat'].mean(), data['lon'].mean(),
-                    start, stop, t, x, y, z, heading, roll, pitch)
+            out = format_fgfs(data['lat'].mean(), data['lon'].mean(),
+                    start, args.duration, t, x, y, z, heading, roll, pitch)
 
             if not out is None:
                 ids.append(id)
@@ -185,8 +186,11 @@ if __name__ == '__main__':
 
             pyplot.show()
 
+    # Write FGFS data to file
     if args.file:
         start_time = dt.strptime(log_date + "%06d" % args.start, '%d%m%y%H%M%S').isoformat()
-        data = {'start': start_time, 'tdelta': args.tdelta, 'ids': ids,
+        data = {'start': start_time,
+                'tdelta': TDELTA,
+                'ids': ids,
                 'logs': logs}
         json.dump(data, args.file)
