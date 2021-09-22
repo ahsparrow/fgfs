@@ -45,6 +45,31 @@ def interpolate(xyz, velocity, orientation):
 
     interp1d(t, xyz, kind='cubic')
 
+# Convert local heading/roll/pitch to ECEF rotation vector
+def hrp_to_rvec(lat, lon, hrp):
+    # Rotate orientation from local to ECEF
+    view_attitude = Rotation.from_euler("zyx", [0, 0, 0], degrees=True).as_matrix()
+
+    # Rotate to view
+    rot = Rotation.from_euler("zyx", [-lon, lat, 0], degrees=True)
+    view_attitude = rot.apply(view_attitude)
+
+    # Swap axes
+    rot = Rotation.from_euler("zyx", [0, 90, 0], degrees=True)
+    view_attitude = rot.apply(view_attitude)
+
+    orientations = []
+    for h, r, p in hrp.transpose():
+        # Set attitude
+        rot = Rotation.from_euler("zyx", [-h, -p, -r], degrees=True)
+        ecef_attitude = rot.apply(view_attitude)
+
+        # Convert to rotation vector
+        orientation = Rotation.from_matrix(ecef_attitude).as_rotvec()
+        orientations.append(orientation)
+
+    return np.stack(orientations, axis=1)
+
 # Create FGFS data
 def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
     try:
@@ -69,28 +94,8 @@ def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
     # Calculate ECEF speed components
     velocity = igc.speed(position, tdelta)
 
-    # Rotate orientation from local to ECEF
-    view_attitude = Rotation.from_euler("zyx", [0, 0, 0], degrees=True).as_matrix()
-
-    # Rotate to view
-    rot = Rotation.from_euler("zyx", [-lon, lat, 0], degrees=True)
-    view_attitude = rot.apply(view_attitude)
-
-    # Swap axes
-    rot = Rotation.from_euler("zyx", [0, 90, 0], degrees=True)
-    view_attitude = rot.apply(view_attitude)
-
-    orientations = []
-    for h, r, p in hrp1.transpose():
-        # Set attitude
-        rot = Rotation.from_euler("zyx", [-h, -p, -r], degrees=True)
-        ecef_attitude = rot.apply(view_attitude)
-
-        # Convert to rotation vector
-        orientation = Rotation.from_matrix(ecef_attitude).as_rotvec()
-        orientations.append(orientation)
-
-    orientations = np.array(orientations).transpose()
+    # ECEF rotation vector
+    orientations = hrp_to_rvec(lat, lon, hrp1)
 
     # Combine data into 2D array
     fgfs_data = np.stack(
