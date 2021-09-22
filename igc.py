@@ -39,11 +39,14 @@ def boxcar(data, n):
     out = np.convolve(d, kernel, mode='valid')
     return out
 
-# Caculate speed from 1-D array of positions
-def speed(x, td, tavg):
-    v = np.diff(x, append=x[-1:]) / td
-    vs = boxcar(v, tavg / td)
-    return vs
+# Caculate velocities from array of XYZ
+def speed(xyz, tdelta):
+    v = np.diff(xyz, append=xyz[:, -1:]) / tdelta
+    vx = boxcar(v[0], 3.0 / tdelta)
+    vy = boxcar(v[1], 3.0 / tdelta)
+    vz = boxcar(v[2], 3.0 / tdelta)
+
+    return np.stack((vx, vy, vz))
 
 def get_tdelta(utc):
     # Sample interval

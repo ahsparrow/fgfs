@@ -40,6 +40,11 @@ def parse_utc(utc):
 
     return h * 3600 + m * 60 + s
 
+def interpolate(xyz, velocity, orientation):
+    t = np.arange(0, xyz.size[1])
+
+    interp1d(t, xyz, kind='cubic')
+
 # Create FGFS data
 def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
     try:
@@ -59,11 +64,10 @@ def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
     # Convert local X/Y/Z to ECEF
     transformer = Transformer.from_crs(igc.EPSG_XY, EPSG_ECEF)
     xec, yec, zec = transformer.transform(xyz1[1], xyz1[0], xyz1[2])
+    position = np.stack((xec, yec, zec))
 
     # Calculate ECEF speed components
-    vx = igc.speed(xec, tdelta, 5)
-    vy = igc.speed(yec, tdelta, 5)
-    vz = igc.speed(zec, tdelta, 5)
+    velocity = igc.speed(position, tdelta)
 
     # Rotate orientation from local to ECEF
     view_attitude = Rotation.from_euler("zyx", [0, 0, 0], degrees=True).as_matrix()
@@ -90,7 +94,9 @@ def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
 
     # Combine data into 2D array
     fgfs_data = np.stack(
-        (xec, yec, zec, orientations[0], orientations[1], orientations[2], vx, vy, vz),
+        (xec, yec, zec,
+            orientations[0], orientations[1], orientations[2],
+            velocity[0], velocity[1], velocity[2]),
         axis=1)
 
     return fgfs_data
