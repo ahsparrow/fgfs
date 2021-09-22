@@ -41,7 +41,7 @@ def parse_utc(utc):
     return h * 3600 + m * 60 + s
 
 # Create FGFS data
-def format_fgfs(lat, lon, start, duration, t, x, y, z, heading, roll, pitch):
+def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
     try:
         # Get start/stop indices
         stop = start + duration
@@ -50,12 +50,15 @@ def format_fgfs(lat, lon, start, duration, t, x, y, z, heading, roll, pitch):
     except IndexError:
         return None
 
+    xyz1 = xyz[:, n:m]
+    hrp1 = hrp[:, n:m]
+
     # Time step size
     tdelta = t[1] - t[0]
 
     # Convert local X/Y/Z to ECEF
     transformer = Transformer.from_crs(igc.EPSG_XY, EPSG_ECEF)
-    xec, yec, zec = transformer.transform(y[n:m], x[n:m], z[n:m])
+    xec, yec, zec = transformer.transform(xyz1[1], xyz1[0], xyz1[2])
 
     # Calculate ECEF speed components
     vx = igc.speed(xec, tdelta, 5)
@@ -74,9 +77,9 @@ def format_fgfs(lat, lon, start, duration, t, x, y, z, heading, roll, pitch):
     view_attitude = rot.apply(view_attitude)
 
     orientations = []
-    for i in range(n, m):
+    for h, r, p in hrp1.transpose():
         # Set attitude
-        rot = Rotation.from_euler("zyx", [-heading[i], -pitch[i], -roll[i]], degrees=True)
+        rot = Rotation.from_euler("zyx", [-h, -p, -r], degrees=True)
         ecef_attitude = rot.apply(view_attitude)
 
         # Convert to rotation vector
@@ -86,8 +89,9 @@ def format_fgfs(lat, lon, start, duration, t, x, y, z, heading, roll, pitch):
     orientations = np.array(orientations).transpose()
 
     # Combine data into 2D array
-    fgfs_data = np.transpose(np.vstack(
-        (xec, yec, zec, orientations[0], orientations[1], orientations[2], vx, vy, vz)))
+    fgfs_data = np.stack(
+        (xec, yec, zec, orientations[0], orientations[1], orientations[2], vx, vy, vz),
+        axis=1)
 
     return fgfs_data
 
@@ -147,11 +151,10 @@ if __name__ == '__main__':
                 errors=True)
 
         # Convert and interpolate to local X/Y/Z
-        t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, TDELTA)
+        t, xyz = igc.resample_xyz(utc, lat, lon, alt, TDELTA)
 
         # Calculate flight dynamics
-        x1, y1, heading, roll, pitch = igc.dynamics(x, y, z, TDELTA,
-                args.wind_speed, args.wind_dir)
+        xyz1, hrp = igc.dynamics(xyz, TDELTA, args.wind_speed, args.wind_dir)
 
         if args.file:
             # Output data for Flightgear
@@ -159,7 +162,7 @@ if __name__ == '__main__':
 
             # Get data for FGFS
             out = format_fgfs(data['lat'].mean(), data['lon'].mean(),
-                    start, args.duration, t, x, y, z, heading, roll, pitch)
+                    start, args.duration, t, xyz, hrp)
 
             if not out is None:
                 ids.append(id)
@@ -178,10 +181,10 @@ if __name__ == '__main__':
 
             axs[0][1].plot(cal_errors)
 
-            axs[1][0].plot(x, y)
+            axs[1][0].plot(xyz[0], xyz[1])
             axs[1][0].set_aspect('equal')
 
-            axs[1][1].plot(x1, y1)
+            axs[1][1].plot(xyz1[0], xyz[1])
             axs[1][1].set_aspect('equal')
 
             pyplot.show()

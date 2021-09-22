@@ -113,12 +113,16 @@ def resample_xyz(utc, lat, lon, alt, resample_t):
     y1 = splev(t, splrep(utc, y, s=0), der=0)
     z1 = splev(t, splrep(utc, alt, s=0), der=0)
 
-    return t, x1, y1, z1
+    return t, np.stack((x1, y1, z1))
 
 # Calculate flight dynamics, heading, roll, etc.
-def dynamics(x, y, z, tdelta, wind_speed, wind_dir):
+def dynamics(xyz, tdelta, wind_speed, wind_dir):
     wind_speed = wind_speed * 1852 / 3600
     wind_dir = np.radians(wind_dir)
+
+    x = xyz[0]
+    y = xyz[1]
+    z = xyz[2]
 
     # Correct for wind velocity
     n = len(x)
@@ -127,28 +131,29 @@ def dynamics(x, y, z, tdelta, wind_speed, wind_dir):
     xw = x + wind_x
     yw = y + wind_y
 
-    # Calculate heading
+    # Calculate (unwrapped) heading
     xdelta = np.diff(xw, append=xw[-1:])
     ydelta = np.diff(yw, append=yw[-1:])
-    heading = np.degrees(np.arctan2(xdelta, ydelta))
+    heading = np.unwrap(np.arctan2(xdelta, ydelta))
 
-    unwrapped_heading = np.unwrap(np.radians(heading))
-    av_unwrapped_heading = boxcar(unwrapped_heading, 4 / tdelta)
+    av_heading = boxcar(heading, 4 / tdelta)
 
     # Calculate speed
     speed = np.sqrt(xdelta ** 2  + ydelta ** 2) / tdelta
     speed = boxcar(speed, 5 / tdelta)
 
     # Bank angle
-    omega = np.diff(unwrapped_heading, append=unwrapped_heading[-1:]) / tdelta
-    theta = np.degrees(np.arctan(omega * speed / 9.81))
-
-    av_theta = boxcar(theta, 5 / tdelta)
+    omega = np.diff(heading, append=heading[-1:]) / tdelta
+    bank = np.degrees(np.arctan(omega * speed / 9.81))
+    bank = boxcar(bank, 5 / tdelta)
 
     # Pitch angle
     zdelta = np.diff(z, append=z[-1:])
     pitch = np.degrees(zdelta / (speed * tdelta))
     pitch = boxcar(pitch, 2 / tdelta)
 
-    return xw, yw, np.mod(np.degrees(av_unwrapped_heading), 360), av_theta, pitch 
+    xyz_out = np.stack((xw, yw, z))
+    hrp_out = np.stack((np.mod(np.degrees(av_heading), 360), bank, pitch))
+
+    return xyz_out, hrp_out
 
