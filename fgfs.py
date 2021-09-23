@@ -24,6 +24,7 @@ import sys
 
 import numpy as np
 from pyproj import Transformer
+from scipy.interpolate import interp1d
 from scipy.spatial.transform import Rotation
 
 import igc
@@ -39,11 +40,6 @@ def parse_utc(utc):
     m, s = divmod(ms, 100)
 
     return h * 3600 + m * 60 + s
-
-def interpolate(xyz, velocity, orientation):
-    t = np.arange(0, xyz.size[1])
-
-    interp1d(t, xyz, kind='cubic')
 
 # Convert local heading/roll/pitch to ECEF rotation vector
 def hrp_to_rvec(lat, lon, hrp):
@@ -70,8 +66,25 @@ def hrp_to_rvec(lat, lon, hrp):
 
     return np.stack(orientations, axis=1)
 
+# Intepolate position and orientation
+def interpolate(xyz, hrp, interp):
+    n = xyz.shape[1]
+    t = np.arange(n)
+    t1 = np.linspace(0, n - 1, (n - 1) * interp + 1)
+
+    # Interpolate positions
+    f = interp1d(t, xyz, kind='linear')
+    xyz_out = f(t1)
+
+    # Interpolate heading/roll/pitch
+    hrp_unwrap = np.unwrap(hrp, period=360.0)
+    f = interp1d(t, hrp_unwrap, kind='linear')
+    hrp_out = f(t1) % 360
+
+    return xyz_out, hrp_out
+
 # Create FGFS data
-def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
+def format_fgfs(lat, lon, start, duration, t, xyz, hrp, interp):
     try:
         # Get start/stop indices
         stop = start + duration
@@ -82,6 +95,9 @@ def format_fgfs(lat, lon, start, duration, t, xyz, hrp):
 
     xyz1 = xyz[:, n:m]
     hrp1 = hrp[:, n:m]
+
+    if interp > 1:
+        xyz1, hrp1 = interpolate(xyz1, hrp1, interp)
 
     # Time step size
     tdelta = t[1] - t[0]
@@ -127,6 +143,8 @@ if __name__ == '__main__':
                         help='wind speed (kts), default 0 kts')
     parser.add_argument('-g', '--geoid', type=float, default=48.0,
                         help='geoid height (m), default 48 m')
+    parser.add_argument('-r', '--replay_rate', type=int, default=1,
+                        help='replay rate (2=half speed, 4=quarter speed...)')
     args = parser.parse_args()
 
     if args.file and not (args.start and args.duration):
@@ -173,7 +191,7 @@ if __name__ == '__main__':
 
             # Get data for FGFS
             out = format_fgfs(data['lat'].mean(), data['lon'].mean(),
-                    start, args.duration, t, xyz, hrp)
+                    start, args.duration, t, xyz, hrp, args.replay_rate)
 
             if not out is None:
                 ids.append(id)
@@ -204,7 +222,7 @@ if __name__ == '__main__':
     if args.file:
         start_time = dt.strptime(log_date + "%06d" % args.start, '%d%m%y%H%M%S').isoformat()
         data = {'start': start_time,
-                'tdelta': TDELTA,
+                'tdelta': TDELTA / args.replay_rate,
                 'ids': ids,
                 'logs': logs}
         json.dump(data, args.file)
