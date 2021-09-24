@@ -23,6 +23,9 @@ import tkinter as tk
 
 import replay
 
+# Update time, in ms
+TDELTA = 100
+
 class App(tk.Frame):
     def __init__(self, replay, master=None):
         super().__init__(master)
@@ -114,7 +117,7 @@ class App(tk.Frame):
         self.label_var.set("%d:%04.1f" % (secs // 60, secs % 60))
 
         self.replay.replay(self.count, freeze=freeze)
-        self.after(int(self.tdelta * 1000), self.tick)
+        self.after(TDELTA, self.tick)
 
 if __name__ == '__main__':
     import argparse
