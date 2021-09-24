@@ -31,12 +31,12 @@ TDELTA = 1
 def speed_filter(data, min_speed):
     t, x, y, z = np.transpose(data)
 
-    vx = igc.speed(x, TDELTA, 3)
-    vy = igc.speed(y, TDELTA, 3)
+    xyz = np.stack((x, y, z))
+    v = igc.speed(xyz, TDELTA)
 
-    v = np.sqrt(vx * vx + vy * vy)
+    v_xy = np.sqrt(v[0] ** 2 + v[1] ** 2)
 
-    return data[vx > min_speed]
+    return data[v_xy > min_speed]
 
 def find_near_misses(logs, threshold):
     for log1, log2 in itertools.permutations(logs, 2):
@@ -109,9 +109,9 @@ if __name__ == '__main__':
         alt = igc.calibrate_altitude(alt_pressure, alt_geoid)
 
         # Convert and interpolate to local X/Y/Z
-        t, x, y, z = igc.resample_xyz(utc, lat, lon, alt, TDELTA)
+        t, xyz = igc.resample_xyz(utc, lat, lon, alt, TDELTA)
 
-        data = np.transpose(np.vstack((t, x, y, z)))
+        data = np.transpose(np.vstack((t, xyz[0], xyz[1], xyz[2])))
         logs.append({'id': id, 'data': data})
 
     print("Searching for near misses...")
