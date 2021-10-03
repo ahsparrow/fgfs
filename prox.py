@@ -18,6 +18,7 @@
 import argparse
 import itertools
 import logging
+from collections import Counter
 from datetime import datetime as dt
 
 import numpy as np
@@ -74,6 +75,34 @@ def find_near_misses(logs, threshold):
                 utc_str = utc.strftime("%H:%M:%S")
                 print("  %s %.1fm" % (utc_str, dist[min_idx]))
 
+def find_gaggles(logs, threshold):
+    gaggle_t = []
+    for log1, log2 in itertools.combinations(logs, 2):
+        # Filter speed less than approx 20kts
+        data1 = speed_filter(log1['data'], 10)
+        data2 = speed_filter(log2['data'], 10)
+
+        # Find common time samples
+        t1, x1, y1, z1 = np.transpose(data1)
+        t2, x2, y2, z2 = np.transpose(data2)
+        i, c1, c2 = np.intersect1d(t1, t2, return_indices=True)
+
+        # Select common times from the two logs
+        data1c = data1[c1]
+        data2c = data2[c2]
+
+        # Calculate distance between logs
+        xyz1 = np.array([(x[1], x[2], x[3]) for x in data1c])
+        xyz2 = np.array([(x[1], x[2], x[3]) for x in data2c])
+        dist = np.linalg.norm(xyz1 - xyz2, axis=1)
+
+        idx = np.where(dist < threshold)
+        gaggle_t += [dt.utcfromtimestamp(x) for x in t1[c1[idx]]]
+
+    from matplotlib import pyplot
+    pyplot.hist(gaggle_t, 1000)
+    pyplot.show()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('elevation', type=float, help='Takeoff elevation')
@@ -83,6 +112,8 @@ if __name__ == '__main__':
                         help='IGC log file')
     parser.add_argument('-g', '--geoid', type=float, default=48.0,
                         help='Geoid height (m), default 48m')
+    parser.add_argument('--gaggle', action='store_true',
+                        help='Gaggle analysis')
     args = parser.parse_args()
 
     logs = []
@@ -116,3 +147,7 @@ if __name__ == '__main__':
 
     print("Searching for near misses...")
     find_near_misses(logs, args.dist)
+
+    if args.gaggle:
+        print("Searching for gaggles...")
+        find_gaggles(logs, 300)
