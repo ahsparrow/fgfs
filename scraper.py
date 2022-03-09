@@ -16,8 +16,10 @@
 # along with IGCVis.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import html
 import os.path
 import re
+import urllib.parse
 
 from bs4 import BeautifulSoup
 import requests
@@ -25,6 +27,7 @@ import requests
 def get_logs(url, log_dir):
     req = requests.get(url)
 
+    # Find the download pop-ups
     soup = BeautifulSoup(req.text, "html.parser")
     links = soup.find_all('a', attrs={'data-toggle': 'popover'})
 
@@ -32,12 +35,22 @@ def get_logs(url, log_dir):
         cn = link.string.strip()
         print("Downloading " + cn)
 
-        data = link['data-content']
-        log_id = re.search("\d{4}-\d{10}", data).group()
+        # Extract the download link
+        dl_soup = BeautifulSoup(html.unescape(link['data-content']),
+                "html.parser")
+        href = dl_soup.find(string=re.compile("Download IGC")).parent['href']
 
-        log_url = 'https://www.soaringspot.com/en_gb/download-contest-flight/%s?dl=1' % log_id
+        # Get the log file URL
+        split_url = urllib.parse.urlsplit(href)
+        if split_url.netloc == "":
+            split_url = split_url._replace(scheme="https",
+                                           netloc="www.soaringspot.com")
+        log_url = urllib.parse.urlunsplit(split_url)
+
+        # Download log file
         log_req = requests.get(log_url)
 
+        # Write to file
         log_path = os.path.join(log_dir, cn + ".igc")
         with open(log_path, "wt") as f:
             f.write(log_req.text)

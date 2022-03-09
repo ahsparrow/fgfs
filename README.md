@@ -7,7 +7,7 @@ Utilites for using the Flightgear flight simulator to visualise IGC logs
 Download log files from SoaringSpot
 
     python scraper.py \
-        hus-bos-challenge-cup-international-2021-husbands-bosworth-2021/results/magenta/task-1-on-2021-08-07 logs
+        https://www/soaringspot.com/en_gb/hus-bos-challenge-cup-international-2021-husbands-bosworth-2021/results/magenta/task-1-on-2021-08-07 logs
 
 Find some near misses (closer than 30m)
 
