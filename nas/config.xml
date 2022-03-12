@@ -1,6 +1,38 @@
 <?xml version="1.0"?>
 <PropertyList>
  <input><keyboard>
+
+   <key n="53">
+    <name>5</name>
+    <desc>Center aileron, elevator, and rudder</desc>
+    <binding>
+     <command>nasal</command>
+     <script>controls.centerFlightControls()</script>
+    </binding>
+    <mod-shift>
+     <desc>Look forward and level</desc>
+     <binding>
+      <command>property-assign</command>
+      <property>/sim/current-view/goal-heading-offset-deg</property>
+      <property>/sim/view/config/front-direction-deg</property>
+     </binding>
+     <binding>
+      <command>property-assign</command>
+      <property>/sim/current-view/goal-pitch-offset-deg</property>
+      <value>0</value>
+     </binding>
+    </mod-shift>
+   </key>
+
+   <key n="109">
+    <name>m</name>
+    <desc>Toggle traffic markers</desc>
+    <binding>
+      <command>property-toggle</command>
+      <property>/sim/marker-pins/traffic</property>
+    </binding>
+   </key>
+
    <key n="356">
     <name>Left</name>
     <desc>Move aileron left (or adjust AP heading.)</desc>
