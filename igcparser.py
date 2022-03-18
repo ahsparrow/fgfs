@@ -136,7 +136,7 @@ if __name__ == "__main__":
     else:
         data = igc['alt']
 
-    tim = [datetime.datetime.fromtimestamp(t) for t in igc['utc']]
+    tim = [datetime.datetime.utcfromtimestamp(t) for t in igc['utc']]
 
     formatter = DateFormatter('%H:%M')
 
