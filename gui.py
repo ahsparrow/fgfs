@@ -17,6 +17,7 @@
 
 import json
 import sys
+from datetime import time
 
 import numpy as np
 import tkinter as tk
@@ -27,10 +28,14 @@ import replay
 TDELTA = 100
 
 class App(tk.Frame):
-    def __init__(self, replay, master=None):
+    def __init__(self, replay, start_time, master=None):
         super().__init__(master)
 
         self.replay = replay
+        self.start_seconds = (start_time.hour * 3600 +
+                              start_time.minute * 60 +
+                              start_time.second)
+
         self.log_len = replay.log_len
         self.tdelta = replay.tdelta
 
@@ -113,8 +118,10 @@ class App(tk.Frame):
 
         self.scale.set(self.count)
 
-        secs = self.count * self.tdelta
-        self.label_var.set("%d:%04.1f" % (secs // 60, secs % 60))
+        secs = self.start_seconds + (self.count * self.tdelta)
+        hour, minute = divmod(secs, 3600)
+        minute, second = divmod(minute, 60)
+        self.label_var.set("%02d:%02d:%04.1f" % (hour, minute, second))
 
         self.replay.replay(self.count, freeze=freeze)
         self.after(TDELTA, self.tick)
@@ -144,9 +151,10 @@ if __name__ == '__main__':
         sys.exit(0)
 
     tdelta = data['tdelta']
+    start_time = time.fromisoformat(data['start'].split("T")[1])
 
     replay_logs = replay.find_logs(args.id, data['logs'], args.dist)
     replay = replay.Replay(replay_logs, tdelta, args.aircraft, args.port)
 
-    app = App(replay)
+    app = App(replay, start_time)
     app.mainloop()
