@@ -15,10 +15,10 @@
 # You should have received a copy of the GNU General Public License
 # along with IGCVis.  If not, see <http://www.gnu.org/licenses/>.
 
-import datetime
 import logging
 import re
 import sys
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
@@ -54,6 +54,10 @@ def parse_igc(igc_file):
         else:
             header[key] = rec[5:-1]
         rec = igc_file.readline()
+
+    # Header dte record is UTC date of first fix
+    dte = datetime.strptime(header['dte'][:6], "%d%m%y")
+    dte_timestamp = dte.replace(tzinfo=timezone.utc).timestamp()
 
     # Find I record
     while not rec.startswith('I'):
@@ -93,7 +97,8 @@ def parse_igc(igc_file):
     data = np.zeros(igc.shape[0], dtype=out_types + add_types)
 
     # UTC times
-    data['utc'] = igc['hour'] * 3600 + igc['min'] * 60 + igc['sec']
+    secs = igc['hour'] * 3600 + igc['min'] * 60 + igc['sec']
+    data['utc'] = dte_timestamp + np.unwrap(secs, period=3600*24)
 
     # Latitude/longitude
     lat = igc['lat_deg'] + igc['lat_min'] / 60000
@@ -124,6 +129,7 @@ if __name__ == "__main__":
     parser.add_argument('igc_file', type=argparse.FileType('r', errors='ignore'))
     parser.add_argument('--gps', action="store_true", help='GPS altitude')
     parser.add_argument('--delta', action="store_true", help='Pressure/GPS delta')
+    parser.add_argument('--utcoffset', type=int, help='UTC offset (hours)')
     args = parser.parse_args()
 
     header, igc = parse_igc(args.igc_file)
@@ -136,7 +142,14 @@ if __name__ == "__main__":
     else:
         data = igc['alt']
 
-    tim = [datetime.datetime.utcfromtimestamp(t) for t in igc['utc']]
+    # Make timezone
+    if args.utcoffset is None:
+        tz = None
+    else:
+        tz = timezone(timedelta(hours=args.utcoffset))
+
+    # Convert UTC to naive datetime
+    tim = [datetime.fromtimestamp(t, tz=tz).replace(tzinfo=None) for t in igc['utc']]
 
     formatter = DateFormatter('%H:%M')
 

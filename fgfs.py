@@ -16,11 +16,11 @@
 # along with IGCVis.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-from datetime import datetime as dt
 import itertools
 import json
 import logging
 import sys
+from datetime import datetime, time, timedelta, timezone
 
 import numpy as np
 from pyproj import Transformer
@@ -35,11 +35,16 @@ EPSG_ECEF = 4978
 TDELTA = 0.1
 
 # Parse IGC UTC value
-def parse_utc(utc):
+def parse_time(utc):
     h, ms = divmod(int(utc), 10000)
     m, s = divmod(ms, 100)
 
-    return h * 3600 + m * 60 + s
+    return time(h, m, s)
+
+# Find (local) time in array of UTC timestamps
+def find_time(utc_ts, time, tz=None):
+    return [i for (i, ts) in enumerate(utc_ts)
+            if datetime.fromtimestamp(ts, tz=tz).time() == time][0]
 
 # Convert local heading/roll/pitch to ECEF rotation vector
 def hrp_to_rvec(lat, lon, hrp):
@@ -84,12 +89,11 @@ def interpolate(xyz, hrp, interp):
     return xyz_out, hrp_out
 
 # Create FGFS data
-def format_fgfs(lat, lon, start, duration, t, xyz, hrp, interp):
+def format_fgfs(lat, lon, start, stop, t, xyz, hrp, interp, tz=None):
     try:
         # Get start/stop indices
-        stop = start + duration
-        n = np.where(t == start)[0][0]
-        m = np.where(t == stop)[0][0]
+        n = find_time(t, start, tz=tz)
+        m = find_time(t, stop, tz=tz)
     except IndexError:
         return None
 
@@ -145,12 +149,24 @@ if __name__ == '__main__':
                         help='geoid height (m), default 48 m')
     parser.add_argument('-r', '--replay_rate', type=int, default=1,
                         help='replay rate (2=half speed, 4=quarter speed...)')
+    parser.add_argument('--utcoffset', type=int, help='UTC offset (hours)')
     args = parser.parse_args()
 
     if args.file and not (args.start and args.duration):
         parser.print_usage()
         print("error: start and duration are required")
         sys.exit(2)
+
+    # Make timezone
+    if args.utcoffset is None:
+        tz = None
+    else:
+        tz = timezone(timedelta(hours=args.utcoffset))
+
+    # Start/stop times
+    if args.file:
+        start = parse_time(args.start)
+        stop = parse_time(args.start + args.duration)
 
     logs = []
     ids = []
@@ -186,12 +202,9 @@ if __name__ == '__main__':
         xyz1, hrp = igc.dynamics(xyz, TDELTA, args.wind_speed, args.wind_dir)
 
         if args.file:
-            # Output data for Flightgear
-            start = parse_utc(args.start)
-
             # Get data for FGFS
             out = format_fgfs(data['lat'].mean(), data['lon'].mean(),
-                    start, args.duration, t, xyz, hrp, args.replay_rate)
+                    start, stop, t, xyz, hrp, args.replay_rate, tz)
 
             if not out is None:
                 ids.append(id)
@@ -220,7 +233,7 @@ if __name__ == '__main__':
 
     # Write FGFS data to file
     if args.file:
-        start_time = dt.strptime(log_date + "%06d" % args.start, '%d%m%y%H%M%S').isoformat()
+        start_time = datetime.strptime(log_date + "%06d" % args.start, '%d%m%y%H%M%S').isoformat()
         data = {'start': start_time,
                 'tdelta': TDELTA / args.replay_rate,
                 'ids': ids,

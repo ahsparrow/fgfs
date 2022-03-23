@@ -19,7 +19,7 @@ import argparse
 import itertools
 import logging
 from collections import Counter
-from datetime import datetime as dt
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
@@ -71,11 +71,11 @@ def find_near_misses(logs, threshold):
                 hit_min_idx = np.argmin(dist[hit])
                 min_idx = hit[hit_min_idx]
 
-                utc = dt.utcfromtimestamp(t1[c1[min_idx]])
+                utc = datetime.fromtimestamp(t1[c1[min_idx]], tz=tz)
                 utc_str = utc.strftime("%H:%M:%S")
                 print("  %s %.1fm" % (utc_str, dist[min_idx]))
 
-def find_gaggles(logs, threshold):
+def find_gaggles(logs, threshold, tz):
     gaggle_t = []
     for log1, log2 in itertools.combinations(logs, 2):
         # Filter speed less than approx 20kts
@@ -97,10 +97,16 @@ def find_gaggles(logs, threshold):
         dist = np.linalg.norm(xyz1 - xyz2, axis=1)
 
         idx = np.where(dist < threshold)
-        gaggle_t += [dt.utcfromtimestamp(x) for x in t1[c1[idx]]]
+        gaggle_t += [datetime.fromtimestamp(x, tz=tz).replace(tzinfo=None) for x in t1[c1[idx]]]
 
     from matplotlib import pyplot
+    from matplotlib.dates import DateFormatter
+
+    formatter = DateFormatter('%H:%M')
+
+    fig, ax = pyplot.subplots()
     pyplot.hist(gaggle_t, 1000)
+    ax.xaxis.set_major_formatter(formatter)
     pyplot.show()
 
 if __name__ == '__main__':
@@ -114,7 +120,14 @@ if __name__ == '__main__':
                         help='Geoid height (m), default 48m')
     parser.add_argument('--gaggle', action='store_true',
                         help='Gaggle analysis')
+    parser.add_argument('--utcoffset', type=int, help='UTC offset (hours)')
     args = parser.parse_args()
+
+    # Make timezone
+    if args.utcoffset is None:
+        tz = None
+    else:
+        tz = timezone(timedelta(hours=args.utcoffset))
 
     logs = []
     for igc_file in args.igc:
@@ -150,4 +163,4 @@ if __name__ == '__main__':
 
     if args.gaggle:
         print("Searching for gaggles...")
-        find_gaggles(logs, 300)
+        find_gaggles(logs, 300, tz=tz)
