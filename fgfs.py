@@ -226,7 +226,7 @@ if __name__ == '__main__':
             axs[1][0].plot(xyz[0], xyz[1])
             axs[1][0].set_aspect('equal')
 
-            axs[1][1].plot(xyz1[0], xyz[1])
+            axs[1][1].plot(xyz1[0], xyz1[1])
             axs[1][1].set_aspect('equal')
 
             pyplot.show()
