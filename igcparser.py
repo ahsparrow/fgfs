@@ -19,6 +19,7 @@ import logging
 import re
 import sys
 from datetime import datetime, timedelta, timezone
+from io import StringIO
 
 import numpy as np
 
@@ -33,43 +34,36 @@ IGC_TLA = {
 }
 
 def parse_igc(igc_file):
-    # Read A record
-    arec = igc_file.readline()
-    if not arec.startswith("A"):
-        logging.error("Missing A record")
-        sys.exit()
+    lines = igc_file.readlines()
 
-    # Read header
+    # A record
+    arec = [x for x in lines if x[0] == "A"][0]
+
+    # H records
     header = {'id': arec[1:7]}
 
-    rec = igc_file.readline()
-    if not rec.startswith("H"):
-        logging.error("Missing H record")
-        sys.exit()
-
-    while rec.startswith("H"):
+    hrec = [x for x in lines if x[0] == "H"]
+    for rec in hrec:
         key = rec[2:5].lower()
         if ":" in rec:
             header[key] = rec.split(":")[1].strip()
         else:
             header[key] = rec[5:-1]
-        rec = igc_file.readline()
 
     # Header dte record is UTC date of first fix
     dte = datetime.strptime(header['dte'][:6], "%d%m%y")
     dte_timestamp = dte.replace(tzinfo=timezone.utc).timestamp()
 
-    # Find I record
-    while not rec.startswith('I'):
-        rec = igc_file.readline()
+    # I record
+    irec = [x for x in lines if x[0] == "I"][0]
 
     # Get number of additions
-    m = re.match(I_REC_RE, rec)
+    m = re.match(I_REC_RE, irec)
     n_add = int(m.group(1))
 
     # Modified I record RE match additions
     irec_re = "I\d{2}" + "(\d{2})(\d{2})([A-Z]{3})" * n_add
-    m = re.match(irec_re, rec)
+    m = re.match(irec_re, irec)
 
     # Base RE and in/out dtypes
     brec_re = B_REC_RE
@@ -91,8 +85,9 @@ def parse_igc(igc_file):
         brec_re += "([A-Z0-9\-]{%d})" % add_len
         add_types.append((add_id, add_type))
 
-    # Parse B records
-    igc = np.fromregex(igc_file, brec_re, in_types + add_types)
+    # B records
+    brec = [x for x in lines if x[0] == "B"]
+    igc = np.fromregex(StringIO("\n".join(brec)), brec_re, in_types + add_types)
 
     data = np.zeros(igc.shape[0], dtype=out_types + add_types)
 
@@ -117,6 +112,15 @@ def parse_igc(igc_file):
     # Bug in some loggers - remove duplicate time samples
     u, idx = np.unique(data['utc'], return_index=True)
     data = data[idx]
+
+    # SeeYou data
+    rec = [x for x in lines if x.startswith("LCU::HPCIDCOMPETITIONID")]
+    if (rec):
+        header['cucid'] = rec[0].split(":")[-1].strip()
+
+    rec = [x for x in lines if x.startswith("LCU::HPPLTPILOT")]
+    if (rec):
+        header['cuplt'] = rec[0].split(":")[-1].strip()
 
     return header, data
 

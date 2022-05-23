@@ -133,7 +133,7 @@ if __name__ == '__main__':
     for igc_file in args.igc:
         print("Reading %s" % igc_file.name)
         hdr, data = parse_igc(igc_file)
-        id = hdr.get('cid') or hdr.get('gid') or hdr['id']
+        id = hdr.get('cucid') or hdr.get('cid') or hdr.get('gid') or hdr['id']
 
         # Discard first few samples
         data = data[5:]
