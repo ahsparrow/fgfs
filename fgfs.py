@@ -139,8 +139,8 @@ if __name__ == '__main__':
                         help="JSON Output file")
     parser.add_argument('-s', '--start', type=int,
                         help='UTC start time (format 130415)')
-    parser.add_argument('-t', '--duration', type=int,
-                        help='duration (s)')
+    parser.add_argument('-t', '--stop', type=int,
+                        help='UTC end time (format 130415)')
     parser.add_argument('-w', '--wind_dir', type=float, default=0.0,
                         help='wind direction')
     parser.add_argument('-v',  '--wind_speed', type=float, default=0.0,
@@ -152,7 +152,7 @@ if __name__ == '__main__':
     parser.add_argument('--utcoffset', type=int, help='UTC offset (hours)')
     args = parser.parse_args()
 
-    if args.file and not (args.start and args.duration):
+    if args.file and not (args.start and args.stop):
         parser.print_usage()
         print("error: start and duration are required")
         sys.exit(2)
@@ -166,7 +166,7 @@ if __name__ == '__main__':
     # Start/stop times
     if args.file:
         start = parse_time(args.start)
-        stop = parse_time(args.start + args.duration)
+        stop = parse_time(args.stop)
 
     logs = []
     ids = []
