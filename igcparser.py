@@ -51,7 +51,8 @@ def parse_igc(igc_file):
             header[key] = rec[5:-1]
 
     # Header dte record is UTC date of first fix
-    dte = datetime.strptime(header['dte'][:6], "%d%m%y")
+    dte_str = header['dte'].split(",")[0][:6]
+    dte = datetime.strptime(dte_str, "%d%m%y")
     dte_timestamp = dte.replace(tzinfo=timezone.utc).timestamp()
 
     # I record

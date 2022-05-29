@@ -210,7 +210,7 @@ if __name__ == '__main__':
                 ids.append(id)
                 logs.append({'data': out.tolist(), 'id': id})
 
-                log_date = hdr.get('dte')
+                log_date = hdr.get('dte').split(",")[0]
             else:
                 logging.warning("no data found")
         else:
