@@ -49,6 +49,9 @@ def get_logs(url, log_dir):
 
         # Download log file
         log_req = requests.get(log_url)
+        # SeeYou doesn't set encoding in response header. May need to set it
+        # manually if requests guesses wrong
+        # log_req.encoding = "windows-1252"
 
         # Write to file
         log_path = os.path.join(log_dir, cn + ".igc")
