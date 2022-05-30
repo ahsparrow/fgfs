@@ -18,6 +18,7 @@
 import argparse
 import itertools
 import logging
+import os.path
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 
@@ -135,7 +136,7 @@ if __name__ == '__main__':
 
     logs = []
     for igc_file in args.igc:
-        print("Reading %s" % igc_file.name)
+        print("Reading %s" % os.path.splitext(os.path.basename(igc_file.name))[0])
         hdr, data = parse_igc(igc_file)
         id = hdr.get('cucid') or hdr.get('cid') or hdr.get('gid') or hdr['id']
 
