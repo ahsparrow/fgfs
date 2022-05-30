@@ -50,6 +50,10 @@ def find_near_misses(logs, threshold):
         t2, x2, y2, z2 = np.transpose(data2)
         i, c1, c2 = np.intersect1d(t1, t2, return_indices=True)
 
+        # Bail out if no common samples
+        if c1.size == 0:
+            continue
+
         # Select common times from the two logs
         data1c = data1[c1]
         data2c = data2[c2]
