@@ -40,8 +40,12 @@ def speed_filter(data, min_speed):
 
     return data[v_xy > min_speed]
 
-def find_near_misses(logs, threshold):
+def find_near_misses(logs, threshold, id):
     for log1, log2 in itertools.permutations(logs, 2):
+        if id and id != log1['id']:
+            # Only find near misses for specified glider
+            continue
+
         # Filter speed less than approx 20kts
         data1 = speed_filter(log1['data'], 10)
         data2 = speed_filter(log2['data'], 10)
@@ -126,6 +130,7 @@ if __name__ == '__main__':
     parser.add_argument('--gaggle', action='store_true',
                         help='Gaggle analysis')
     parser.add_argument('--utcoffset', type=int, help='UTC offset (hours)')
+    parser.add_argument('--id', help="Only fix prox for this glider ID")
     args = parser.parse_args()
 
     # Make timezone
@@ -164,7 +169,7 @@ if __name__ == '__main__':
         logs.append({'id': id, 'data': data})
 
     print("Searching for near misses...")
-    find_near_misses(logs, args.dist)
+    find_near_misses(logs, args.dist, args.id)
 
     if args.gaggle:
         print("Searching for gaggles...")
