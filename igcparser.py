@@ -63,7 +63,7 @@ def parse_igc(igc_file):
     n_add = int(m.group(1))
 
     # Modified I record RE match additions
-    irec_re = "I\d{2}" + "(\d{2})(\d{2})([A-Z]{3})" * n_add
+    irec_re = "I\d{2}" + "(\d{4,6})([A-Z]{3})" * n_add
     m = re.match(irec_re, irec)
 
     # Base RE and in/out dtypes
@@ -79,8 +79,16 @@ def parse_igc(igc_file):
     # Additions
     add_types = []
     for n in range(n_add):
-        add_id = m.group(n * 3 + 3).lower()
-        add_len = int(m.group(n * 3 + 2)) - int(m.group(n * 3 + 1)) + 1
+        add_id = m.group(n * 2 + 2).lower()
+
+        startstop = m.group(n * 2 + 1)
+        if len(startstop) == 4:
+            add_len = int(startstop[2:4]) - int(startstop[0:2])
+        elif len(startstop) == 5:
+            add_len = int(startstop[2:5]) - int(startstop[0:2])
+        elif len(startstop) == 6:
+            add_len = int(startstop[3:6]) - int(startstop[0:3])
+
         add_type = IGC_TLA.get(add_id, "a%d" % add_len)
 
         brec_re += "([A-Z0-9\-]{%d})" % add_len
