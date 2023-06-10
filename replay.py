@@ -31,6 +31,8 @@ class Replay:
 
         if aircraft == 'asg29':
             self.model = 'Aircraft/ASG29/Models/asg29.xml'
+        elif aircraft == 'arcus':
+            self.model = 'Aircraft/Arcus/Models/Arcus.xml'
         elif aircraft == 'spitfire':
             self.model = 'Aircraft/Spitfire/Models/spitfire_model.xml'
         elif aircraft == 'lego':

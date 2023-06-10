@@ -137,7 +137,7 @@ if __name__ == '__main__':
             help='add others if within distance (m)')
     parser.add_argument('--port', '-p', type=int, default=5124,
             help='FG port number')
-    parser.add_argument('--aircraft', '-a', choices=['dg101', 'asg29', 'spitfire', 'lego'],
+    parser.add_argument('--aircraft', '-a', choices=['dg101', 'asg29', 'arcus', 'spitfire', 'lego'],
             default='asg29', help='aircraft model')
     parser.add_argument('--info', action='store_true',
             help='print log info')
